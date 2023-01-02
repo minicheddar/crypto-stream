@@ -18,7 +18,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tungstenite::Message;
 
 pub struct Coinbase {
-    pub stream_subscriptions: Arc<Mutex<HashMap<String, WebsocketSubscription>>>,
+    stream_subscriptions: Arc<Mutex<HashMap<String, WebsocketSubscription>>>,
 }
 
 impl Coinbase {
@@ -143,10 +143,11 @@ impl WebsocketSubscriber for Coinbase {
 
                 // check that subscription response does not throw an error
                 if let Message::Text(json) = socket.read_message().expect("Error reading message") {
-                    if let CoinbaseSubscriptionResponse::Error { reason } =
-                        serde_json::from_str(&json).unwrap()
-                    {
-                        panic!("{reason}");
+                    match serde_json::from_str(&json).unwrap() {
+                        CoinbaseSubscriptionResponse::Error { reason } => {
+                            panic!("{reason}");
+                        }
+                        _ => (),
                     }
                 }
             }

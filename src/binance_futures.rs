@@ -19,7 +19,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tungstenite::Message;
 
 pub struct BinanceFutures {
-    pub stream_subscriptions: Arc<Mutex<HashMap<String, WebsocketSubscription>>>,
+    stream_subscriptions: Arc<Mutex<HashMap<String, WebsocketSubscription>>>,
 }
 
 impl BinanceFutures {
@@ -147,7 +147,7 @@ impl WebsocketSubscriber for BinanceFutures {
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(tag = "e", rename_all = "camelCase")]
 pub enum BinanceMessage {
-    #[serde(alias = "trade", alias = "aggTrade")]
+    #[serde(alias = "trade")]
     Trade(BinanceTrade),
 
     #[serde(alias = "depthUpdate")]
