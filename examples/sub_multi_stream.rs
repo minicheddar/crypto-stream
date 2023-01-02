@@ -14,20 +14,20 @@ use futures::StreamExt;
 #[tokio::main]
 async fn main() {
     let subscriptions = vec![
-        // WebsocketSubscription::new(
-        //     Venue::Coinbase,
-        //     "BTC",
-        //     "USD",
-        //     InstrumentKind::Spot,
-        //     WebsocketSubscriptionKind::Trade,
-        // ),
-        // WebsocketSubscription::new(
-        //     Venue::BinanceFuturesUsd,
-        //     "BTC",
-        //     "USDT",
-        //     InstrumentKind::FuturesPerpetual,
-        //     WebsocketSubscriptionKind::Trade,
-        // ),
+        WebsocketSubscription::new(
+            Venue::Coinbase,
+            "BTC",
+            "USD",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::Trade,
+        ),
+        WebsocketSubscription::new(
+            Venue::BinanceFuturesUsd,
+            "BTC",
+            "USDT",
+            InstrumentKind::FuturesPerpetual,
+            WebsocketSubscriptionKind::Trade,
+        ),
         // WebsocketSubscription::new(
         //     Venue::BinanceFuturesUsd,
         //     "BNB",
@@ -35,13 +35,13 @@ async fn main() {
         //     InstrumentKind::FuturesPerpetual,
         //     WebsocketSubscriptionKind::L2Quote,
         // ),
-        WebsocketSubscription::new(
-            Venue::Coinbase,
-            "BTC",
-            "USD",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::L2Quote,
-        ),
+        // WebsocketSubscription::new(
+        //     Venue::Coinbase,
+        //     "BTC",
+        //     "USD",
+        //     InstrumentKind::Spot,
+        //     WebsocketSubscriptionKind::L2Quote,
+        // ),
     ];
 
     let venue_subs = build_venue_subscriptions(subscriptions);
