@@ -18,15 +18,15 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tungstenite::Message;
 
-pub struct BinanceFutures {
+pub struct BinanceSpot {
     stream_subscriptions: Arc<Mutex<HashMap<String, WebsocketSubscription>>>,
 }
 
-impl BinanceFutures {
-    pub const BASE_WS_URL: &'static str = "wss://fstream.binance.com/ws";
+impl BinanceSpot {
+    pub const BASE_WS_URL: &'static str = "wss://stream.binance.com:9443/ws";
 
     pub const TRADE_CHANNEL: &'static str = "@trade";
-    pub const L2_QUOTE_CHANNEL: &'static str = "@depth10@100ms";
+    pub const L2_QUOTE_CHANNEL: &'static str = "@depth@100ms";
 
     pub fn new() -> Self {
         Self {
@@ -100,7 +100,7 @@ impl BinanceFutures {
 }
 
 #[async_trait]
-impl WebsocketSubscriber for BinanceFutures {
+impl WebsocketSubscriber for BinanceSpot {
     async fn subscribe(
         &mut self,
         subscriptions: &Vec<WebsocketSubscription>,
@@ -111,7 +111,7 @@ impl WebsocketSubscriber for BinanceFutures {
 
         let mut sub_id: u8 = 1;
         for sub in subscriptions {
-            if sub.venue == Venue::BinanceFuturesUsd {
+            if sub.venue == Venue::BinanceSpot {
                 let (market, channel) = Self::build_stream_name(&sub).unwrap();
 
                 // update subscription map so we can match against it on each exchange message
@@ -155,81 +155,30 @@ pub enum BinanceMessage {
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
-pub struct BinanceL1Quote {
-    #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
-    pub event_time: DateTime<Utc>,
-
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transacton_time: DateTime<Utc>,
-
-    #[serde(alias = "s", deserialize_with = "from_str")]
-    pub symbol: String,
-
-    #[serde(alias = "u")]
-    pub orderbook_update_id: u64,
-
-    #[serde(alias = "b", deserialize_with = "from_str")]
-    pub bid_price: f64,
-
-    #[serde(alias = "B", deserialize_with = "from_str")]
-    pub bid_quantity: f64,
-
-    #[serde(alias = "a", deserialize_with = "from_str")]
-    pub ask_price: f64,
-
-    #[serde(alias = "A", deserialize_with = "from_str")]
-    pub ask_quantity: f64,
-}
-
-#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
-pub struct BinanceAggregatedTrade {
-    #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
-    pub event_time: DateTime<Utc>,
-
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transaction_time: DateTime<Utc>,
-
-    #[serde(alias = "s", deserialize_with = "from_str")]
-    pub symbol: String,
-
-    #[serde(alias = "p", deserialize_with = "from_str")]
-    pub price: f64,
-
-    #[serde(alias = "q", deserialize_with = "from_str")]
-    pub quantity: f64,
-
-    #[serde(alias = "a")]
-    pub id: u64,
-
-    #[serde(alias = "f")]
-    pub first_trade_id: u64,
-
-    #[serde(alias = "l")]
-    pub last_trade_id: u64,
-
-    #[serde(alias = "m", deserialize_with = "is_buyer_maker")]
-    pub is_buyer_maker: Side,
-}
-
-#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub struct BinanceTrade {
     #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
     pub event_time: DateTime<Utc>,
-
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transaction_time: DateTime<Utc>,
 
     #[serde(alias = "s", deserialize_with = "from_str")]
     pub symbol: String,
 
     #[serde(alias = "t")]
-    pub id: u64,
+    pub trade_id: u64,
 
     #[serde(alias = "p", deserialize_with = "from_str")]
     pub price: f64,
 
     #[serde(alias = "q", deserialize_with = "from_str")]
     pub quantity: f64,
+
+    #[serde(alias = "b")]
+    pub buyer_order_id: u64,
+
+    #[serde(alias = "a")]
+    pub seller_order_id: u64,
+
+    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
+    pub transaction_time: DateTime<Utc>,
 
     #[serde(alias = "m", deserialize_with = "is_buyer_maker")]
     pub side: Side,
@@ -238,12 +187,12 @@ pub struct BinanceTrade {
 impl From<(Instrument, BinanceTrade)> for MarketData {
     fn from((instrument, trade): (Instrument, BinanceTrade)) -> Self {
         Self {
-            venue: Venue::BinanceFuturesUsd,
+            venue: Venue::BinanceSpot,
             instrument,
             venue_time: trade.event_time,
             received_time: Utc::now(),
             kind: MarketDataKind::Trade(Trade {
-                id: trade.id.to_string(),
+                id: trade.trade_id.to_string(),
                 price: trade.price,
                 quantity: trade.quantity,
                 side: trade.side,
@@ -257,9 +206,6 @@ pub struct BinanceL2Quote {
     #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
     pub event_time: DateTime<Utc>,
 
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transaction_time: DateTime<Utc>,
-
     #[serde(alias = "s", deserialize_with = "from_str")]
     pub symbol: String,
 
@@ -268,9 +214,6 @@ pub struct BinanceL2Quote {
 
     #[serde(alias = "u")]
     pub final_update_id: u64,
-
-    #[serde(alias = "pu")]
-    pub final_update_id_last_stream: u64,
 
     #[serde(alias = "b")]
     pub bids: Vec<OrderBookLevel>,
@@ -282,7 +225,7 @@ pub struct BinanceL2Quote {
 impl From<(Instrument, BinanceL2Quote)> for MarketData {
     fn from((instrument, quote): (Instrument, BinanceL2Quote)) -> Self {
         Self {
-            venue: Venue::BinanceFuturesUsd,
+            venue: Venue::BinanceSpot,
             instrument,
             venue_time: quote.event_time,
             received_time: Utc::now(),
@@ -302,35 +245,35 @@ mod tests {
 
     #[test]
     fn deserialise_json_to_trade() {
-        let input = r#"{"e":"trade","E":1672668653672,"T":1672668653667,"s":"BTCUSDT","t":3168007982,"p":"16692.00","q":"0.001","X":"MARKET","m":true}"#;
+        let input = r#"{"e":"trade","E":1672745782430,"s":"BTCUSDT","t":2417705108,"p":"16735.16000000","q":"0.04678000","b":16965571202,"a":16965571059,"T":1672745782430,"m":false,"M":true}"#;
 
         assert_eq!(
             serde_json::from_str::<BinanceMessage>(input).expect("failed to deserialise"),
             BinanceMessage::Trade(BinanceTrade {
-                event_time: Utc.timestamp_millis_opt(1672668653672).unwrap(),
-                transaction_time: Utc.timestamp_millis_opt(1672668653667).unwrap(),
+                event_time: Utc.timestamp_millis_opt(1672745782430).unwrap(),
                 symbol: "BTCUSDT".to_string(),
-                id: 3168007982,
-                price: 16692.00,
-                quantity: 0.001,
-                side: Side::Sell,
+                trade_id: 2417705108,
+                price: 16735.16000000,
+                quantity: 0.04678000,
+                buyer_order_id: 16965571202,
+                seller_order_id: 16965571059,
+                transaction_time: Utc.timestamp_millis_opt(1672745782430).unwrap(),
+                side: Side::Buy,
             })
         );
     }
 
     #[test]
     fn deserialise_json_to_l2_quote() {
-        let input = r#"{"e":"depthUpdate","E":1672670043998,"T":1672670043992,"s":"BNBUSDT","U":2323268998826,"u":2323269001838,"pu":2323268998603,"b":[["246.220","32.04"],["246.210","42.66"]],"a":[["246.230","40.84"],["246.240","39.10"]]}"#;
+        let input = r#"{"e":"depthUpdate","E":1672745259450,"s":"BNBUSDT","U":29961902358,"u":29961902414,"b":[["246.220","32.04"],["246.210","42.66"]],"a":[["246.230","40.84"],["246.240","39.10"]]}"#;
 
         assert_eq!(
             serde_json::from_str::<BinanceMessage>(input).expect("failed to deserialise"),
             BinanceMessage::L2Quote(BinanceL2Quote {
-                event_time: Utc.timestamp_millis_opt(1672670043998).unwrap(),
-                transaction_time: Utc.timestamp_millis_opt(1672670043992).unwrap(),
+                event_time: Utc.timestamp_millis_opt(1672745259450).unwrap(),
                 symbol: "BNBUSDT".to_string(),
-                first_update_id: 2323268998826,
-                final_update_id: 2323269001838,
-                final_update_id_last_stream: 2323268998603,
+                first_update_id: 29961902358,
+                final_update_id: 29961902414,
                 bids: vec![
                     OrderBookLevel {
                         price: 246.220,

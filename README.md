@@ -6,17 +6,17 @@ High performance market data handlers for cryptocurrency exchanges
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
 
 ## Features
-* Websocket integrations for Binance Futures and Coinbase
+* Websocket integrations for Binance Spot, Binance USD Futures and Coinbase
 * Supports real-time trade and L2 quote data
 * Simple subscription API
-* Transforms exchange-native messages to a common `MarketData` type for cross-exchange signals
+* Transforms exchange-native messages to a common `MarketData` type for easier cross-exchange signal generation
 * Allows composition of multi-exchange data to unified stream
 
 
 ## Todo:
-* Add support for top 5 exchanges by daily volume
+* Add support for more exchanges (Okx, Huobi, Gate.io, Bybit, Kucoin, Kraken)
 * Cross-exchange/unified order book building
-* Add support for more data types (liquidations, funding ticker, mark price)
+* Add support for additional data types (liquidations, funding ticker, mark price)
 * Add support for additional data sinks (mmap file, gRPC, zmq socket)
 
 

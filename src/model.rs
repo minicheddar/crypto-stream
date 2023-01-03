@@ -87,6 +87,7 @@ pub enum Side {
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Deserialize, Serialize, Hash)]
 pub enum Venue {
     BinanceFuturesUsd,
+    BinanceSpot,
     Coinbase,
 }
 

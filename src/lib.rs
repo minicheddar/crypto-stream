@@ -1,5 +1,6 @@
 use crate::{
     binance_futures::BinanceFutures,
+    binance_spot::BinanceSpot,
     coinbase::Coinbase,
     model::*,
     websocket::{WebsocketSubscriber, WebsocketSubscription},
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub mod binance_futures;
+pub mod binance_spot;
 pub mod coinbase;
 pub mod model;
 pub mod websocket;
@@ -38,6 +40,9 @@ pub async fn subscriptions_into_stream(
             Venue::Coinbase => streams.push(Coinbase::new().subscribe(&subs).await.unwrap()),
             Venue::BinanceFuturesUsd => {
                 streams.push(BinanceFutures::new().subscribe(&subs).await.unwrap())
+            },
+            Venue::BinanceSpot => {
+                streams.push(BinanceSpot::new().subscribe(&subs).await.unwrap())
             }
         }
     }
