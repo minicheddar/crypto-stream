@@ -2,6 +2,7 @@ use crate::{
     binance_futures::BinanceFutures,
     binance_spot::BinanceSpot,
     coinbase::Coinbase,
+    okx::Okx,
     model::*,
     websocket::{WebsocketSubscriber, WebsocketSubscription},
 };
@@ -13,6 +14,7 @@ pub mod binance_futures;
 pub mod binance_spot;
 pub mod coinbase;
 pub mod model;
+pub mod okx;
 pub mod websocket;
 
 pub fn build_venue_subscriptions(
@@ -40,10 +42,9 @@ pub async fn subscriptions_into_stream(
             Venue::Coinbase => streams.push(Coinbase::new().subscribe(&subs).await.unwrap()),
             Venue::BinanceFuturesUsd => {
                 streams.push(BinanceFutures::new().subscribe(&subs).await.unwrap())
-            },
-            Venue::BinanceSpot => {
-                streams.push(BinanceSpot::new().subscribe(&subs).await.unwrap())
             }
+            Venue::BinanceSpot => streams.push(BinanceSpot::new().subscribe(&subs).await.unwrap()),
+            Venue::Okx => streams.push(Okx::new().subscribe(&subs).await.unwrap()),
         }
     }
     return stream::select_all(streams);
