@@ -2,8 +2,8 @@ use crate::{
     binance_futures::BinanceFutures,
     binance_spot::BinanceSpot,
     coinbase::Coinbase,
-    okx::Okx,
     model::*,
+    okx::Okx,
     websocket::{WebsocketSubscriber, WebsocketSubscription},
 };
 use futures::stream::{self, SelectAll};

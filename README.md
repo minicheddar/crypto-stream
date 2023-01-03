@@ -1,27 +1,30 @@
 # crypto-stream
-High performance market data handlers for cryptocurrency exchanges
+An experiment in unifying multiple cryptocurrency exchange streams under a single API. Think CCXT websockets, but in Rust.
 
 ---
 
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
 
 ## Features
-* Websocket integrations for Binance Spot, Binance USD Futures, Coinbase and Okx
-* Supports real-time trade and L2 quote data
 * Simple subscription API
-* Transforms exchange-native messages to a common `MarketData` type for easier cross-exchange signal generation
-* Allows composition of multi-exchange data to unified stream
+* Supports real-time trade and L2 quote data
+* Transforms exchange-native messages to a common `MarketData` type, for easier cross-exchange signal generation
+* Websocket integrations for:
+    * Binance (USD Futures + Spot)
+    * Coinbase
+    * OKx (Futures + Spot)
 
-
-## Todo:
-* Add support for more exchanges (Huobi, Gate.io, Bybit, Kucoin, Kraken)
+## Roadmap:
+* Add support for more exchanges (Huobi, Gate.io, Bybit, Kucoin, Kraken.. maybe others if there's a demand)
 * Cross-exchange/unified order book building
-* Add support for additional data types (liquidations, funding ticker, mark price)
-* Add support for additional data sinks (mmap file, gRPC, zmq socket)
+* Add support for additional market data streams (liquidations, funding ticker, mark price)
+* Add support for additional sinks (mmap file, gRPC, zmq socket)
+* Add support for user-stream data streams (order fills/cancellations, balance updates)
+* Add support for streaming Uniswap V2/V3 reserve changes
 
 
 ## Getting started:
-* `$ cargo run --example sub_multi_stream`
+`$ cargo run --example sub_multi_stream`
 
 or 
 
