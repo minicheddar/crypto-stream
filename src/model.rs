@@ -89,6 +89,7 @@ pub enum Venue {
     BinanceFuturesUsd,
     BinanceSpot,
     Coinbase,
+    Okx,
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
@@ -157,6 +158,16 @@ where
     D: de::Deserializer<'de>,
 {
     let timestamp = de::Deserialize::deserialize(value)?;
+    Ok(Utc.timestamp_millis_opt(timestamp).unwrap())
+}
+
+pub fn from_str_unix_epoch_ms<'de, D>(value: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let str: String = de::Deserialize::deserialize(value)?;
+    let timestamp = str.parse::<i64>().expect("unable to deserialize str to i64");
+
     Ok(Utc.timestamp_millis_opt(timestamp).unwrap())
 }
 
