@@ -34,6 +34,13 @@ async fn main() {
             "USDT",
             InstrumentKind::Spot,
             WebsocketSubscriptionKind::L2Quote,
+        ),
+        WebsocketSubscription::new(
+            Venue::Okx,
+            "BTC",
+            "USDT",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::L2Quote,
         )
     ];
 

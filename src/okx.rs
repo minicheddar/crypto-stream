@@ -71,30 +71,39 @@ impl Okx {
     ) -> Option<MarketData> {
         match socket.read_message().expect("Error reading message") {
             Message::Text(json) => {
-                println!("{}", json);
+                // println!("{}", json);
                 let map = stream_subscriptions.lock().unwrap();
 
-                let msg: OkxMessage = serde_json::from_str(&json).unwrap();
-                println!("{:?}", msg);
+                match serde_json::from_str(&json).unwrap() {
+                    OkxMessage::Trade(trade) => {
+                        let sub = map
+                            .get(&format!(
+                                "{}|{}",
+                                trade.arg.instrument_id,
+                                Self::TRADE_CHANNEL
+                            ))
+                            .expect("unable to find matching subscription");
 
-                // match serde_json::from_str(&json).unwrap() {
-                //     BinanceMessage::Trade(trade) => {
-                //         let sub = map
-                //             .get(&format!("{}|{}", trade.symbol, Self::TRADE_CHANNEL))
-                //             .expect("unable to find matching subscription");
+                        return Some(MarketData::from((
+                            sub.instrument.clone(),
+                            trade.data[0].clone(),
+                        )));
+                    }
+                    OkxMessage::L2Update(quote) => {
+                        let sub = map
+                            .get(&format!(
+                                "{}|{}",
+                                quote.arg.instrument_id,
+                                Self::L2_QUOTE_CHANNEL
+                            ))
+                            .expect("unable to find matching subscription");
 
-                //         return Some(MarketData::from((sub.instrument.clone(), trade)));
-                //     }
-                //     BinanceMessage::L2Quote(quote) => {
-                //         let sub = map
-                //             .get(&format!("{}|{}", quote.symbol, Self::L2_QUOTE_CHANNEL))
-                //             .expect("unable to find matching subscription");
-
-                //         return Some(MarketData::from((sub.instrument.clone(), quote)));
-                //     }
-                // }
-
-                None
+                        return Some(MarketData::from((
+                            sub.instrument.clone(),
+                            quote.data[0].clone(),
+                        )));
+                    }
+                }
             }
             x => {
                 println!("other: {:?}", x);
@@ -148,22 +157,29 @@ impl WebsocketSubscriber for Okx {
     }
 }
 
-// #[derive(Clone, Eq, PartialEq, Debug, Deserialize, Serialize)]
-// #[serde(tag = "type", rename_all = "lowercase")]
-// pub enum OkxSubscriptionResponse {
-//     #[serde(alias = "subscriptions")]
-//     Subscribed {
-//         channels: serde_json::Value,
-//     },
-//     Error {
-//         reason: String,
-//     },
-// }
-
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum OkxMessage {
     Trade(OkxTrade),
+
+    L2Update(OkxL2Update),
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OkxArg {
+    pub channel: String,
+
+    #[serde(alias = "instId")]
+    pub instrument_id: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OkxAction {
+    Update,
+
+    Snapshot,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -171,13 +187,6 @@ pub enum OkxMessage {
 pub struct OkxTrade {
     pub arg: OkxArg,
     pub data: Vec<OkxTradeData>,
-}
-
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OkxArg {
-    pub channel: String,
-    pub inst_id: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -198,141 +207,91 @@ pub struct OkxTradeData {
     pub side: Side,
 
     #[serde(alias = "ts", deserialize_with = "from_str_unix_epoch_ms")]
-    pub ts: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
 }
 
-// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-// #[serde(tag = "type")]
-// pub enum CoinbaseMessage {
-//     #[serde(alias = "last_match", alias = "match")]
-//     Trade(CoinbaseTrade),
+impl From<(Instrument, OkxTradeData)> for MarketData {
+    fn from((instrument, trade): (Instrument, OkxTradeData)) -> Self {
+        Self {
+            venue: Venue::Okx,
+            instrument,
+            venue_time: trade.timestamp,
+            received_time: Utc::now(),
+            kind: MarketDataKind::Trade(Trade {
+                id: trade.trade_id.to_string(),
+                price: trade.price,
+                quantity: trade.size,
+                side: trade.side,
+            }),
+        }
+    }
+}
 
-//     #[serde(alias = "snapshot")]
-//     Snapshot(CoinbaseSnapshot),
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OkxL2Update {
+    pub arg: OkxArg,
+    pub action: OkxAction,
+    pub data: Vec<OkxL2Data>,
+}
 
-//     #[serde(alias = "l2update")]
-//     L2Update(CoinbaseL2Update),
-// }
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OkxL2Data {
+    pub bids: Vec<OkxLevel>,
 
-// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-// pub struct CoinbaseTrade {
-//     pub trade_id: u64,
+    pub asks: Vec<OkxLevel>,
 
-//     pub maker_order_id: String,
+    #[serde(alias = "ts", deserialize_with = "from_str_unix_epoch_ms")]
+    pub timestamp: DateTime<Utc>,
 
-//     pub taker_order_id: String,
+    pub checksum: i64,
+}
 
-//     pub side: Side,
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct OkxLevel {
+    #[serde(deserialize_with = "from_str")]
+    pub price: f64,
 
-//     #[serde(deserialize_with = "from_str")]
-//     pub size: f64,
+    #[serde(deserialize_with = "from_str")]
+    pub quantity: f64,
 
-//     #[serde(deserialize_with = "from_str")]
-//     pub price: f64,
+    #[serde(skip_serializing)]
+    pub deprecated: String,
 
-//     pub product_id: String,
+    #[serde(deserialize_with = "from_str")]
+    pub num_orders_at_level: i64,
+}
 
-//     pub sequence: u64,
+impl From<(Instrument, OkxL2Data)> for MarketData {
+    fn from((instrument, quote): (Instrument, OkxL2Data)) -> Self {
+        let bids = quote
+            .bids
+            .iter()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
 
-//     #[serde(deserialize_with = "from_str")]
-//     pub time: DateTime<Utc>,
-// }
+        let asks = quote
+            .asks
+            .iter()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
 
-// impl From<(Instrument, CoinbaseTrade)> for MarketData {
-//     fn from((instrument, trade): (Instrument, CoinbaseTrade)) -> Self {
-//         Self {
-//             venue: Venue::Coinbase,
-//             instrument,
-//             venue_time: trade.time,
-//             received_time: Utc::now(),
-//             kind: MarketDataKind::Trade(Trade {
-//                 id: trade.trade_id.to_string(),
-//                 price: trade.price,
-//                 quantity: trade.size,
-//                 side: trade.side,
-//             }),
-//         }
-//     }
-// }
-
-// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-// pub struct CoinbaseSnapshot {
-//     pub product_id: String,
-
-//     #[serde(alias = "bids")]
-//     pub bids: Vec<OrderBookLevel>,
-
-//     #[serde(alias = "asks")]
-//     pub asks: Vec<OrderBookLevel>,
-// }
-
-// impl From<(Instrument, CoinbaseSnapshot)> for MarketData {
-//     fn from((instrument, snapshot): (Instrument, CoinbaseSnapshot)) -> Self {
-//         Self {
-//             venue: Venue::Coinbase,
-//             instrument,
-//             venue_time: Utc::now(),
-//             received_time: Utc::now(),
-//             kind: MarketDataKind::QuoteL2(OrderBook {
-//                 bids: snapshot.bids,
-//                 asks: snapshot.asks,
-//             }),
-//         }
-//     }
-// }
-
-// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-// pub struct CoinbaseL2Change {
-//     side: Side,
-
-//     #[serde(deserialize_with = "from_str")]
-//     price: f64,
-
-//     #[serde(deserialize_with = "from_str")]
-//     amount: f64,
-// }
-
-// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-// pub struct CoinbaseL2Update {
-//     pub product_id: String,
-
-//     #[serde(deserialize_with = "from_str")]
-//     pub time: DateTime<Utc>,
-
-//     pub changes: Vec<CoinbaseL2Change>,
-// }
-
-// impl From<(Instrument, CoinbaseL2Update)> for MarketData {
-//     fn from((instrument, l2): (Instrument, CoinbaseL2Update)) -> Self {
-//         let bids = l2
-//             .changes
-//             .iter()
-//             .filter(|x| x.side == Side::Buy)
-//             .map(|x| OrderBookLevel {
-//                 price: x.price,
-//                 quantity: x.amount,
-//             })
-//             .collect();
-
-//         let asks = l2
-//             .changes
-//             .iter()
-//             .filter(|x| x.side == Side::Sell)
-//             .map(|x| OrderBookLevel {
-//                 price: x.price,
-//                 quantity: x.amount,
-//             })
-//             .collect();
-
-//         Self {
-//             venue: Venue::Coinbase,
-//             instrument,
-//             venue_time: Utc::now(),
-//             received_time: Utc::now(),
-//             kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
-//         }
-//     }
-// }
+        Self {
+            venue: Venue::Okx,
+            instrument,
+            venue_time: quote.timestamp,
+            received_time: Utc::now(),
+            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -348,7 +307,7 @@ mod tests {
             OkxMessage::Trade(OkxTrade {
                 arg: OkxArg {
                     channel: "trades".to_string(),
-                    inst_id: "BTC-USDT".to_string()
+                    instrument_id: "BTC-USDT".to_string()
                 },
                 data: vec![OkxTradeData {
                     instrument_id: "BTC-USDT".to_string(),
@@ -356,7 +315,7 @@ mod tests {
                     price: 16741.9,
                     size: 0.01928,
                     side: Side::Sell,
-                    ts: DateTime::parse_from_rfc3339("2023-01-03T14:20:05.254Z")
+                    timestamp: DateTime::parse_from_rfc3339("2023-01-03T14:20:05.254Z")
                         .unwrap()
                         .with_timezone(&Utc),
                 }]
@@ -364,55 +323,103 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn deserialise_json_to_snapshot() {
-    //     let input = r#"{"type":"snapshot","product_id":"BTC-USD","asks":[["16688.91","0.04395852"],["16688.92","0.00219120"]],"bids":[["16688.11","0.19317565"],["16688.10","0.00492671"]]}"#;
+    #[test]
+    fn deserialise_json_to_snapshot() {
+        let input = r#"{"arg":{"channel":"books","instId":"BTC-USDT"},"action":"snapshot","data":[{"asks":[["16676","0.00021488","0","1"],["16676.1","0.01117729","0","1"]],"bids":[["16675.9","0.77561803","0","4"],["16675.3","0.09913111","0","1"]],"ts":"1672758244804","checksum":425110082}]}"#;
 
-    //     assert_eq!(
-    //         serde_json::from_str::<CoinbaseMessage>(input).expect("failed to deserialise"),
-    //         CoinbaseMessage::Snapshot(CoinbaseSnapshot {
-    //             product_id: "BTC-USD".to_string(),
-    //             bids: vec![
-    //                 OrderBookLevel {
-    //                     price: 16688.11,
-    //                     quantity: 0.19317565,
-    //                 },
-    //                 OrderBookLevel {
-    //                     price: 16688.10,
-    //                     quantity: 0.00492671,
-    //                 },
-    //             ],
-    //             asks: vec![
-    //                 OrderBookLevel {
-    //                     price: 16688.91,
-    //                     quantity: 0.04395852,
-    //                 },
-    //                 OrderBookLevel {
-    //                     price: 16688.92,
-    //                     quantity: 0.00219120,
-    //                 },
-    //             ]
-    //         })
-    //     );
-    // }
+        assert_eq!(
+            serde_json::from_str::<OkxMessage>(input).expect("failed to deserialise"),
+            OkxMessage::L2Update(OkxL2Update {
+                arg: OkxArg {
+                    channel: "books".to_string(),
+                    instrument_id: "BTC-USDT".to_string()
+                },
+                action: OkxAction::Snapshot,
+                data: vec![OkxL2Data {
+                    bids: vec![
+                        OkxLevel {
+                            price: 16675.9,
+                            quantity: 0.77561803,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 4
+                        },
+                        OkxLevel {
+                            price: 16675.3,
+                            quantity: 0.09913111,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 1
+                        }
+                    ],
+                    asks: vec![
+                        OkxLevel {
+                            price: 16676.0,
+                            quantity: 0.00021488,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 1
+                        },
+                        OkxLevel {
+                            price: 16676.1,
+                            quantity: 0.01117729,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 1
+                        }
+                    ],
+                    timestamp: DateTime::parse_from_rfc3339("2023-01-03T15:04:04.804Z")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    checksum: 425110082
+                }]
+            })
+        );
+    }
 
-    // #[test]
-    // fn deserialise_json_to_l2_update() {
-    //     let input = r#"{"type":"l2update","product_id":"BTC-USD","changes":[["buy","16694.62","0.01"]],"time":"2023-01-02T15:11:20.883271Z"}"#;
+    #[test]
+    fn deserialise_json_to_l2_update() {
+        let input = r#"{"arg":{"channel":"books","instId":"BTC-USDT"},"action":"update","data":[{"asks":[["16678.7","0.35997156","0","1"],["16678.8","0.73367326","0","2"]],"bids":[["16675.1","0.1824","0","2"],["16674.1","1.06931486","0","4"]],"ts":"1672758245204","checksum":-2137937443}]}"#;
 
-    //     assert_eq!(
-    //         serde_json::from_str::<CoinbaseMessage>(input).expect("failed to deserialise"),
-    //         CoinbaseMessage::L2Update(CoinbaseL2Update {
-    //             product_id: "BTC-USD".to_string(),
-    //             time: DateTime::parse_from_rfc3339("2023-01-02T15:11:20.883271Z")
-    //                 .unwrap()
-    //                 .with_timezone(&Utc),
-    //             changes: vec![CoinbaseL2Change {
-    //                 side: Side::Buy,
-    //                 price: 16694.62,
-    //                 amount: 0.01
-    //             }]
-    //         })
-    //     )
-    // }
+        assert_eq!(
+            serde_json::from_str::<OkxMessage>(input).expect("failed to deserialise"),
+            OkxMessage::L2Update(OkxL2Update {
+                arg: OkxArg {
+                    channel: "books".to_string(),
+                    instrument_id: "BTC-USDT".to_string()
+                },
+                action: OkxAction::Update,
+                data: vec![OkxL2Data {
+                    bids: vec![
+                        OkxLevel {
+                            price: 16675.1,
+                            quantity: 0.1824,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 2
+                        },
+                        OkxLevel {
+                            price: 16674.1,
+                            quantity: 1.06931486,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 4
+                        }
+                    ],
+                    asks: vec![
+                        OkxLevel {
+                            price: 16678.7,
+                            quantity: 0.35997156,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 1
+                        },
+                        OkxLevel {
+                            price: 16678.8,
+                            quantity: 0.73367326,
+                            deprecated: "0".to_string(),
+                            num_orders_at_level: 2
+                        }
+                    ],
+                    timestamp: DateTime::parse_from_rfc3339("2023-01-03T15:04:05.204Z")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    checksum: -2137937443
+                }]
+            })
+        );
+    }
 }
