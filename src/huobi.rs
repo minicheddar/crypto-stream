@@ -236,7 +236,7 @@ impl From<(Instrument, HuobiTradeData)> for MarketData {
             venue_time: trade.timestamp,
             received_time: Utc::now(),
             kind: MarketDataKind::Trade(Trade {
-                id: trade.trade_id.to_string(),
+                id: Some(trade.trade_id.to_string()),
                 price: trade.price,
                 quantity: trade.amount,
                 side: trade.side,

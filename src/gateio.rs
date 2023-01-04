@@ -199,7 +199,7 @@ impl From<(Instrument, GateIOTradeData)> for MarketData {
             venue_time: trade.timestamp,
             received_time: Utc::now(),
             kind: MarketDataKind::Trade(Trade {
-                id: trade.id.to_string(),
+                id: Some(trade.id.to_string()),
                 price: trade.price,
                 quantity: trade.amount,
                 side: trade.side,

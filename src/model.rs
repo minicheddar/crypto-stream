@@ -71,16 +71,19 @@ pub enum OrderStatus {
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum OrderKind {
+    #[serde(alias = "l")]
     Limit,
+
+    #[serde(alias = "m")]
     Market,
 }
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum Side {
-    #[serde(alias = "buy")]
+    #[serde(alias = "buy", alias = "b")]
     Buy,
 
-    #[serde(alias = "sell")]
+    #[serde(alias = "sell", alias = "s")]
     Sell,
 }
 
@@ -91,6 +94,7 @@ pub enum Venue {
     Coinbase,
     GateIO,
     Huobi,
+    Kraken,
     Okx,
 }
 
@@ -118,7 +122,7 @@ pub enum InstrumentKind {
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub struct Trade {
-    pub id: String,
+    pub id: Option<String>,
     pub price: f64,
     pub quantity: f64,
     pub side: Side,
@@ -153,6 +157,23 @@ where
 {
     let str: String = de::Deserialize::deserialize(value)?;
     str.parse::<T>().map_err(de::Error::custom)
+}
+
+pub fn from_str_unix_epoch_sec<'de, D>(value: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let str: String = de::Deserialize::deserialize(value)?;
+    let result = str.parse::<i64>();
+
+    let timestamp = match result {
+        Ok(x) => x,
+        Err(_) => str
+            .parse::<f64>()
+            .expect("unable to parse str as i64 or f64") as i64,
+    };
+
+    Ok(Utc.timestamp_opt(timestamp, 0).unwrap())
 }
 
 pub fn from_unix_epoch_ms<'de, D>(value: D) -> Result<DateTime<Utc>, D::Error>

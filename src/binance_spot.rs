@@ -192,7 +192,7 @@ impl From<(Instrument, BinanceTrade)> for MarketData {
             venue_time: trade.event_time,
             received_time: Utc::now(),
             kind: MarketDataKind::Trade(Trade {
-                id: trade.trade_id.to_string(),
+                id: Some(trade.trade_id.to_string()),
                 price: trade.price,
                 quantity: trade.quantity,
                 side: trade.side,
