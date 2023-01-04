@@ -11,12 +11,15 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
 * Transforms exchange-native messages to a common `MarketData` type, for easier cross-exchange signal generation
 * Websocket integrations for:
     * Binance (USD Futures + Spot)
-    * Coinbase
-    * OKx (Futures + Spot)
+    * Coinbase (Spot)
+    * OKx (Spot)
+    * Huobi (Spot)
+    * Gate.io (Spot)
 
 ## Roadmap:
-* Add support for more exchanges (Huobi, Gate.io, Bybit, Kucoin, Kraken.. maybe others if there's a demand)
+* Add support for more exchanges (Bybit, Kucoin, Kraken.. maybe others if there's a demand)
 * Cross-exchange/unified order book building
+* Add support for futures contracts
 * Add support for additional market data streams (liquidations, funding ticker, mark price)
 * Add support for additional sinks (mmap file, gRPC, zmq socket)
 * Add support for user-stream data streams (order fills/cancellations, balance updates)

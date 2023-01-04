@@ -89,6 +89,7 @@ pub enum Venue {
     BinanceFuturesUsd,
     BinanceSpot,
     Coinbase,
+    GateIO,
     Huobi,
     Okx,
 }
@@ -167,7 +168,14 @@ where
     D: de::Deserializer<'de>,
 {
     let str: String = de::Deserialize::deserialize(value)?;
-    let timestamp = str.parse::<i64>().expect("unable to deserialize str to i64");
+    let result = str.parse::<i64>();
+
+    let timestamp = match result {
+        Ok(x) => x,
+        Err(_) => str
+            .parse::<f64>()
+            .expect("unable to parse str as i64 or f64") as i64,
+    };
 
     Ok(Utc.timestamp_millis_opt(timestamp).unwrap())
 }

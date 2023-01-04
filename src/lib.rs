@@ -2,6 +2,7 @@ use crate::{
     binance_futures::BinanceFutures,
     binance_spot::BinanceSpot,
     coinbase::Coinbase,
+    gateio::GateIO,
     huobi::Huobi,
     model::*,
     okx::Okx,
@@ -14,6 +15,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 pub mod binance_futures;
 pub mod binance_spot;
 pub mod coinbase;
+pub mod gateio;
 pub mod huobi;
 pub mod model;
 pub mod okx;
@@ -46,6 +48,7 @@ pub async fn subscriptions_into_stream(
                 streams.push(BinanceFutures::new().subscribe(&subs).await.unwrap())
             }
             Venue::BinanceSpot => streams.push(BinanceSpot::new().subscribe(&subs).await.unwrap()),
+            Venue::GateIO => streams.push(GateIO::new().subscribe(&subs).await.unwrap()),
             Venue::Huobi => streams.push(Huobi::new().subscribe(&subs).await.unwrap()),
             Venue::Okx => streams.push(Okx::new().subscribe(&subs).await.unwrap()),
         }
