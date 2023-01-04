@@ -3,8 +3,8 @@ use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use crate::model::{
-    from_str, from_str_unix_epoch_sec, from_unix_epoch_ms, Instrument, MarketData, MarketDataKind,
-    OrderBook, OrderBookLevel, OrderKind, Side, Trade, Venue,
+    from_str, from_str_unix_epoch_sec, Instrument, MarketData, MarketDataKind, OrderBook,
+    OrderBookLevel, OrderKind, Side, Trade, Venue,
 };
 use crate::websocket::{
     Websocket, WebsocketClient, WebsocketSubscriber, WebsocketSubscription,
@@ -26,7 +26,7 @@ impl Kraken {
     pub const BASE_WS_URL: &'static str = "wss://ws.kraken.com/";
 
     pub const TRADE_CHANNEL: &'static str = "trade";
-    pub const L2_QUOTE_CHANNEL: &'static str = "book-10";
+    pub const L2_QUOTE_CHANNEL: &'static str = "book";
 
     pub fn new() -> Self {
         Self {
@@ -71,7 +71,7 @@ impl Kraken {
     ) -> Option<MarketData> {
         match socket.read_message().expect("Error reading message") {
             Message::Text(json) => {
-                println!("{}", json);
+                // println!("{}", json);
                 let map = stream_subscriptions.lock().unwrap();
 
                 match serde_json::from_str(&json).unwrap() {
@@ -89,14 +89,29 @@ impl Kraken {
                         };
 
                         return Some(MarketData::from((sub.instrument.clone(), agg_trade)));
-                    } 
-                    // BinanceMessage::L2Quote(quote) => {
-                    //     let sub = map
-                    //         .get(&format!("{}|{}", quote.symbol, Self::L2_QUOTE_CHANNEL))
-                    //         .expect("unable to find matching subscription");
+                    }
+                    KrakenMessage::Snapshot(snapshot) => {
+                        let sub = map
+                            .get(&format!("{}|{}", snapshot.symbol, snapshot.channel_name))
+                            .expect("unable to find matching subscription");
 
-                    //     return Some(MarketData::from((sub.instrument.clone(), quote)));
-                    // }
+                        return Some(MarketData::from((sub.instrument.clone(), snapshot)));
+                    }
+                    KrakenMessage::L2UpdateSingle(quote) => {
+                        let sub = map
+                            .get(&format!("{}|{}", quote.symbol, quote.channel_name))
+                            .expect("unable to find matching subscription");
+
+                        return Some(MarketData::from((sub.instrument.clone(), quote)));
+                    }
+                    KrakenMessage::L2UpdateDouble(quote) => {
+                        // println!("{:?}", quote);
+                        let sub = map
+                            .get(&format!("{}|{}", quote.symbol, quote.channel_name))
+                            .expect("unable to find matching subscription");
+
+                        return Some(MarketData::from((sub.instrument.clone(), quote)));
+                    }
                 }
             }
             x => {
@@ -122,10 +137,17 @@ impl WebsocketSubscriber for Kraken {
                 let (market, channel) = Self::build_stream_name(&sub).unwrap();
 
                 // update subscription map so we can match against it on each exchange message
+                let sub_channel;
+                match channel {
+                    Self::TRADE_CHANNEL => sub_channel = "trade",
+                    Self::L2_QUOTE_CHANNEL => sub_channel = "book-10",
+
+                    _ => panic!("Unexpected channel"),
+                }
                 self.stream_subscriptions
                     .lock()
                     .unwrap()
-                    .insert(format!("{}|{}", market, &channel), sub.clone());
+                    .insert(format!("{}|{}", market, &sub_channel), sub.clone());
 
                 // subscribe to market / channel
                 let _ = socket.write_message(Message::Text(
@@ -159,8 +181,12 @@ pub enum KrakenMessage {
     Heartbeat(KrakenHeartbeat),
 
     Trade(KrakenTrade),
-    // #[serde(alias = "depthUpdate")]
-    // L2Quote(BinanceL2Quote),
+
+    Snapshot(KrakenSnapshot),
+
+    L2UpdateSingle(KrakenL2UpdateSingle),
+
+    L2UpdateDouble(KrakenL2UpdateDouble),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
@@ -239,72 +265,200 @@ impl From<(Instrument, KrakenTradeData)> for MarketData {
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
-pub struct BinanceL1Quote {
-    #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
-    pub event_time: DateTime<Utc>,
+pub struct KrakenSnapshot {
+    pub channel_id: u64,
 
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transacton_time: DateTime<Utc>,
+    pub data: KrakenSnapshotData,
 
-    #[serde(alias = "s", deserialize_with = "from_str")]
+    pub channel_name: String,
+
     pub symbol: String,
-
-    #[serde(alias = "u")]
-    pub orderbook_update_id: u64,
-
-    #[serde(alias = "b", deserialize_with = "from_str")]
-    pub bid_price: f64,
-
-    #[serde(alias = "B", deserialize_with = "from_str")]
-    pub bid_quantity: f64,
-
-    #[serde(alias = "a", deserialize_with = "from_str")]
-    pub ask_price: f64,
-
-    #[serde(alias = "A", deserialize_with = "from_str")]
-    pub ask_quantity: f64,
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
-pub struct BinanceL2Quote {
-    #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
-    pub event_time: DateTime<Utc>,
+impl From<(Instrument, KrakenSnapshot)> for MarketData {
+    fn from((instrument, quote): (Instrument, KrakenSnapshot)) -> Self {
+        let bids = quote
+            .data
+            .bids
+            .iter()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
 
-    #[serde(alias = "T", deserialize_with = "from_unix_epoch_ms")]
-    pub transaction_time: DateTime<Utc>,
+        let asks = quote
+            .data
+            .asks
+            .iter()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
 
-    #[serde(alias = "s", deserialize_with = "from_str")]
-    pub symbol: String,
-
-    #[serde(alias = "U")]
-    pub first_update_id: u64,
-
-    #[serde(alias = "u")]
-    pub final_update_id: u64,
-
-    #[serde(alias = "pu")]
-    pub final_update_id_last_stream: u64,
-
-    #[serde(alias = "b")]
-    pub bids: Vec<OrderBookLevel>,
-
-    #[serde(alias = "a")]
-    pub asks: Vec<OrderBookLevel>,
-}
-
-impl From<(Instrument, BinanceL2Quote)> for MarketData {
-    fn from((instrument, quote): (Instrument, BinanceL2Quote)) -> Self {
         Self {
             venue: Venue::Kraken,
             instrument,
-            venue_time: quote.event_time,
+            venue_time: Utc::now(), // TODO: make this optional
+            received_time: Utc::now(),
+            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct KrakenSnapshotData {
+    #[serde(rename = "bs")]
+    pub bids: Vec<KrakenLevel>,
+
+    #[serde(rename = "as")]
+    pub asks: Vec<KrakenLevel>,
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct KrakenLevel {
+    #[serde(deserialize_with = "from_str")]
+    pub price: f64,
+
+    #[serde(deserialize_with = "from_str")]
+    pub quantity: f64,
+
+    #[serde(deserialize_with = "from_str_unix_epoch_sec")]
+    pub timestamp: DateTime<Utc>,
+
+    #[serde(default, rename = "r")]
+    pub republished: Option<String>,
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct KrakenL2UpdateSingle {
+    pub channel_id: u64,
+
+    pub data: KrakenL2Data,
+
+    pub channel_name: String,
+
+    pub symbol: String,
+}
+
+impl From<(Instrument, KrakenL2UpdateSingle)> for MarketData {
+    fn from((instrument, quote): (Instrument, KrakenL2UpdateSingle)) -> Self {
+        let bids = quote
+            .data
+            .bids
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        let asks = quote
+            .data
+            .asks
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        Self {
+            venue: Venue::Kraken,
+            instrument,
+            venue_time: Utc::now(), // TODO: make this optional
+            received_time: Utc::now(),
+            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct KrakenL2UpdateDouble {
+    pub channel_id: u64,
+
+    pub data1: KrakenL2Data,
+
+    pub data2: KrakenL2Data,
+
+    pub channel_name: String,
+
+    pub symbol: String,
+}
+
+impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
+    fn from((instrument, quote): (Instrument, KrakenL2UpdateDouble)) -> Self {
+        // TODO: MERGE THESE TOGETHER
+        let _bids1: Vec<OrderBookLevel> = quote
+            .data1
+            .bids
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        let _bids2: Vec<OrderBookLevel> = quote
+            .data2
+            .bids
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        let _asks1: Vec<OrderBookLevel> = quote
+            .data1
+            .asks
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        let _asks2: Vec<OrderBookLevel> = quote
+            .data2
+            .asks
+            .iter()
+            .flatten()
+            .map(|x| OrderBookLevel {
+                price: x.price,
+                quantity: x.quantity,
+            })
+            .collect();
+
+        Self {
+            venue: Venue::Kraken,
+            instrument,
+            venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
             kind: MarketDataKind::QuoteL2(OrderBook {
-                bids: quote.bids,
-                asks: quote.asks,
+                bids: vec![],
+                asks: vec![],
             }),
         }
     }
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct KrakenL2Data {
+    #[serde(rename = "b")]
+    pub bids: Option<Vec<KrakenLevel>>,
+
+    #[serde(rename = "a")]
+    pub asks: Option<Vec<KrakenLevel>>,
+
+    #[serde(default, rename = "c")]
+    pub checksum: Option<String>,
 }
 
 #[cfg(test)]
@@ -348,40 +502,149 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn deserialise_json_to_l2_quote() {
-    //     let input = r#"{"e":"depthUpdate","E":1672670043998,"T":1672670043992,"s":"BNBUSDT","U":2323268998826,"u":2323269001838,"pu":2323268998603,"b":[["246.220","32.04"],["246.210","42.66"]],"a":[["246.230","40.84"],["246.240","39.10"]]}"#;
+    #[test]
+    fn deserialise_snapshot_json_to_l2_quote() {
+        let input = r#"[336,{"as":[["16835.00000","0.16686808","1672847524.720055"],["16838.30000","0.47317063","1672847522.867256"]],"bs":[["16834.90000","5.36202364","1672847529.231729"],["16834.40000","4.39497549","1672847529.170574"]]},"book-10","XBT/USD"]"#;
 
-    //     assert_eq!(
-    //         serde_json::from_str::<KrakenMessage>(input).expect("failed to deserialise"),
-    //         KrakenMessage::L2Quote(BinanceL2Quote {
-    //             event_time: Utc.timestamp_millis_opt(1672670043998).unwrap(),
-    //             transaction_time: Utc.timestamp_millis_opt(1672670043992).unwrap(),
-    //             symbol: "BNBUSDT".to_string(),
-    //             first_update_id: 2323268998826,
-    //             final_update_id: 2323269001838,
-    //             final_update_id_last_stream: 2323268998603,
-    //             bids: vec![
-    //                 OrderBookLevel {
-    //                     price: 246.220,
-    //                     quantity: 32.04,
-    //                 },
-    //                 OrderBookLevel {
-    //                     price: 246.210,
-    //                     quantity: 42.66,
-    //                 },
-    //             ],
-    //             asks: vec![
-    //                 OrderBookLevel {
-    //                     price: 246.230,
-    //                     quantity: 40.84,
-    //                 },
-    //                 OrderBookLevel {
-    //                     price: 246.240,
-    //                     quantity: 39.10,
-    //                 },
-    //             ]
-    //         })
-    //     )
-    // }
+        assert_eq!(
+            serde_json::from_str::<KrakenMessage>(input).expect("failed to deserialise"),
+            KrakenMessage::Snapshot(KrakenSnapshot {
+                channel_id: 336,
+                data: KrakenSnapshotData {
+                    asks: vec![
+                        KrakenLevel {
+                            price: 16835.00000,
+                            quantity: 0.16686808,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:52:04Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        },
+                        KrakenLevel {
+                            price: 16838.30000,
+                            quantity: 0.47317063,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:52:02Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        }
+                    ],
+                    bids: vec![
+                        KrakenLevel {
+                            price: 16834.90000,
+                            quantity: 5.36202364,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:52:09Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        },
+                        KrakenLevel {
+                            price: 16834.40000,
+                            quantity: 4.39497549,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:52:09Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        }
+                    ],
+                },
+                channel_name: "book-10".to_string(),
+                symbol: "XBT/USD".to_string()
+            })
+        )
+    }
+
+    #[test]
+    fn deserialise_single_payload_json_to_l2_quote() {
+        let input = r#"[336,{"b":[["16802.10000","0.00000000","1672845724.467174"],["16800.70000","0.38922671","1672845714.146221","r"]],"c":"2138871801"},"book-10","XBT/USD"]"#;
+
+        assert_eq!(
+            serde_json::from_str::<KrakenMessage>(input).expect("failed to deserialise"),
+            KrakenMessage::L2UpdateSingle(KrakenL2UpdateSingle {
+                channel_id: 336,
+                data: KrakenL2Data {
+                    bids: Some(vec![
+                        KrakenLevel {
+                            price: 16802.10000,
+                            quantity: 0.00000000,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:22:04Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        },
+                        KrakenLevel {
+                            price: 16800.70000,
+                            quantity: 0.38922671,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:21:54Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: Some("r".to_string())
+                        }
+                    ]),
+                    asks: None,
+                    checksum: Some("2138871801".to_string())
+                },
+                channel_name: "book-10".to_string(),
+                symbol: "XBT/USD".to_string()
+            })
+        )
+    }
+
+    #[test]
+    fn deserialise_double_payload_json_to_l2_quote() {
+        let input = r#"[336,{"a":[["16781.30000","0.00000000","1672845081.666864"],["16783.30000","0.22450899","1672845077.409939","r"]]},{"b":[["16781.00000","0.02396342","1672845081.667161"],["16781.00000","0.02085587","1672845081.667277"]],"c":"791170235"},"book-10","XBT/USD"]"#;
+
+        assert_eq!(
+            serde_json::from_str::<KrakenMessage>(input).expect("failed to deserialise"),
+            KrakenMessage::L2UpdateDouble(KrakenL2UpdateDouble {
+                channel_id: 336,
+                data1: KrakenL2Data {
+                    asks: Some(vec![
+                        KrakenLevel {
+                            price: 16781.30000,
+                            quantity: 0.00000000,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        },
+                        KrakenLevel {
+                            price: 16783.30000,
+                            quantity: 0.22450899,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:17Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: Some("r".to_string())
+                        },
+                    ]),
+                    bids: None,
+                    checksum: None
+                },
+                data2: KrakenL2Data {
+                    bids: Some(vec![
+                        KrakenLevel {
+                            price: 16781.00000,
+                            quantity: 0.02396342,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        },
+                        KrakenLevel {
+                            price: 16781.00000,
+                            quantity: 0.02085587,
+                            timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                                .unwrap()
+                                .with_timezone(&Utc),
+                            republished: None
+                        }
+                    ]),
+                    asks: None,
+                    checksum: Some("791170235".to_string())
+                },
+                channel_name: "book-10".to_string(),
+                symbol: "XBT/USD".to_string()
+            })
+        )
+    }
 }

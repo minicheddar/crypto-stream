@@ -56,6 +56,13 @@ async fn main() {
             InstrumentKind::Spot,
             WebsocketSubscriptionKind::L2Quote,
         ),
+        WebsocketSubscription::new(
+            Venue::Kraken,
+            "XBT",
+            "USD",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::L2Quote,
+        ),
     ];
 
     let venue_subs = build_venue_subscriptions(subscriptions);
