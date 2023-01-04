@@ -171,7 +171,7 @@ pub enum HuobiMessage {
 
     Trade(HuobiTrade),
 
-    L2Update(HuobiL2Update), // L2Update(OkxL2Update),
+    L2Update(HuobiL2Update),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -296,7 +296,7 @@ impl From<(Instrument, DateTime<Utc>, HuobiL2Tick)> for MarketData {
             .collect();
 
         Self {
-            venue: Venue::Okx,
+            venue: Venue::Huobi,
             instrument,
             venue_time: timestamp,
             received_time: Utc::now(),

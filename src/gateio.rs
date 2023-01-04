@@ -72,7 +72,7 @@ impl GateIO {
     ) -> Option<MarketData> {
         match socket.read_message().expect("Error reading message") {
             Message::Text(json) => {
-                println!("{}", json);
+                // println!("{}", json);
 
                 let map = stream_subscriptions.lock().unwrap();
 
@@ -82,20 +82,14 @@ impl GateIO {
                             .get(&format!("{}|{}", trade.result.symbol, trade.channel))
                             .expect("unable to find matching subscription");
 
-                        println!("{:?}", trade);
-
                         return Some(MarketData::from((sub.instrument.clone(), trade.result)));
                     }
                     GateIOMessage::L2Update(quote) => {
                         let sub = map
-                            .get(&quote.channel)
+                            .get(&format!("{}|{}", quote.result.symbol, quote.channel))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((
-                            sub.instrument.clone(),
-                            quote.response_timestamp,
-                            quote.tick.clone(),
-                        )));
+                        return Some(MarketData::from((sub.instrument.clone(), quote.result)));
                     }
                 }
             }
@@ -161,7 +155,7 @@ impl WebsocketSubscriber for GateIO {
 pub enum GateIOMessage {
     Trade(GateIOTrade),
 
-    L2Update(HuobiL2Update), // L2Update(OkxL2Update),
+    L2Update(GateIOL2Update),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -216,60 +210,45 @@ impl From<(Instrument, GateIOTradeData)> for MarketData {
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HuobiL2Update {
-    #[serde(alias = "ch")]
+pub struct GateIOL2Update {
+    #[serde(alias = "time_ms", deserialize_with = "from_unix_epoch_ms")]
+    pub timestamp: DateTime<Utc>,
+
     pub channel: String,
 
-    #[serde(alias = "ts", deserialize_with = "from_unix_epoch_ms")]
-    pub response_timestamp: DateTime<Utc>,
+    pub event: String,
 
-    pub tick: HuobiL2Tick,
+    pub result: GateIOL2Data,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HuobiL2Tick {
-    #[serde(alias = "seqNum")]
-    pub sequence_number: u64,
+pub struct GateIOL2Data {
+    #[serde(alias = "t", deserialize_with = "from_unix_epoch_ms")]
+    pub timestamp: DateTime<Utc>,
 
-    pub bids: Vec<HuobiLevel>,
+    #[serde(alias = "lastUpdateId")]
+    pub last_update_id: u64,
 
-    pub asks: Vec<HuobiLevel>,
+    #[serde(alias = "s")]
+    pub symbol: String,
+
+    pub bids: Vec<OrderBookLevel>,
+
+    pub asks: Vec<OrderBookLevel>,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct HuobiLevel {
-    pub price: f64,
-
-    pub quantity: f64,
-}
-
-impl From<(Instrument, DateTime<Utc>, HuobiL2Tick)> for MarketData {
-    fn from((instrument, timestamp, quote): (Instrument, DateTime<Utc>, HuobiL2Tick)) -> Self {
-        let bids = quote
-            .bids
-            .iter()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
-
-        let asks = quote
-            .asks
-            .iter()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
-
+impl From<(Instrument, GateIOL2Data)> for MarketData {
+    fn from((instrument, quote): (Instrument, GateIOL2Data)) -> Self {
         Self {
-            venue: Venue::Okx,
+            venue: Venue::GateIO,
             instrument,
-            venue_time: timestamp,
+            venue_time: quote.timestamp,
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::QuoteL2(OrderBook {
+                bids: quote.bids,
+                asks: quote.asks,
+            }),
         }
     }
 }
@@ -307,36 +286,41 @@ mod tests {
 
     #[test]
     fn deserialise_json_to_l2_update() {
-        let input = r#"{"ch":"market.btcusdt.mbp.refresh.10","ts":1672825916217,"tick":{"seqNum":161573989890,"bids":[[16840.68,0.76565],[16840.0,0.653206]],"asks":[[16840.69,1.365447],[16841.55,0.3]]}}"#;
+        let input = r#"{"time":1672832986,"time_ms":1672832986322,"channel":"spot.order_book","event":"update","result":{"t":1672832986308,"lastUpdateId":10436902160,"s":"BTC_USDT","bids":[["16842.5","0.0001"],["16842.4","0.0001"]],"asks":[["16842.6","0.0001"],["16842.9","0.0004"]]}}"#;
 
         assert_eq!(
             serde_json::from_str::<GateIOMessage>(input).expect("failed to deserialise"),
-            GateIOMessage::L2Update(HuobiL2Update {
-                channel: "market.btcusdt.mbp.refresh.10".to_string(),
-                response_timestamp: DateTime::parse_from_rfc3339("2023-01-04T09:51:56.217Z")
+            GateIOMessage::L2Update(GateIOL2Update {
+                timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.322Z")
                     .unwrap()
                     .with_timezone(&Utc),
-                tick: HuobiL2Tick {
-                    sequence_number: 161573989890,
+                channel: "spot.order_book".to_string(),
+                event: "update".to_string(),
+                result: GateIOL2Data {
+                    timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.308Z")
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    last_update_id: 10436902160,
+                    symbol: "BTC_USDT".to_string(),
                     bids: vec![
-                        HuobiLevel {
-                            price: 16840.68,
-                            quantity: 0.76565
+                        OrderBookLevel {
+                            price: 16842.5,
+                            quantity: 0.0001
                         },
-                        HuobiLevel {
-                            price: 16840.0,
-                            quantity: 0.653206
-                        }
+                        OrderBookLevel {
+                            price: 16842.4,
+                            quantity: 0.0001
+                        },
                     ],
                     asks: vec![
-                        HuobiLevel {
-                            price: 16840.69,
-                            quantity: 1.365447
+                        OrderBookLevel {
+                            price: 16842.6,
+                            quantity: 0.0001
                         },
-                        HuobiLevel {
-                            price: 16841.55,
-                            quantity: 0.3
-                        }
+                        OrderBookLevel {
+                            price: 16842.9,
+                            quantity: 0.0004
+                        },
                     ]
                 }
             })
