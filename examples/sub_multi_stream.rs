@@ -41,7 +41,14 @@ async fn main() {
             "USDT",
             InstrumentKind::Spot,
             WebsocketSubscriptionKind::L2Quote,
-        )
+        ),
+        WebsocketSubscription::new(
+            Venue::Huobi,
+            "BTC",
+            "USDT",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::L2Quote,
+        ),
     ];
 
     let venue_subs = build_venue_subscriptions(subscriptions);
