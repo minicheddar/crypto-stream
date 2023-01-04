@@ -89,6 +89,7 @@ pub enum Venue {
     BinanceFuturesUsd,
     BinanceSpot,
     Coinbase,
+    Huobi,
     Okx,
 }
 

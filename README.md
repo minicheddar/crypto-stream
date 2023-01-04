@@ -5,7 +5,7 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
 
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
 
-## Features
+## Features:
 * Simple subscription API
 * Supports real-time trade and L2 quote data
 * Transforms exchange-native messages to a common `MarketData` type, for easier cross-exchange signal generation
