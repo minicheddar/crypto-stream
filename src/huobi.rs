@@ -101,15 +101,15 @@ impl Huobi {
                             .expect("unable to send huobi pong");
                         return None;
                     }
-                    HuobiMessage::L2Update(quote) => {
+                    HuobiMessage::L2Update(update) => {
                         let sub = map
-                            .get(&quote.channel)
+                            .get(&update.channel)
                             .expect("unable to find matching subscription");
 
                         return Some(MarketData::from((
                             sub.instrument.clone(),
-                            quote.response_timestamp,
-                            quote.tick.clone(),
+                            update.response_timestamp,
+                            update.tick.clone(),
                         )));
                     }
                 }
@@ -300,7 +300,7 @@ impl From<(Instrument, DateTime<Utc>, HuobiL2Tick)> for MarketData {
             instrument,
             venue_time: timestamp,
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
         }
     }
 }

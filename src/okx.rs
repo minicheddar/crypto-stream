@@ -89,18 +89,18 @@ impl Okx {
                             trade.data[0].clone(),
                         )));
                     }
-                    OkxMessage::L2Update(quote) => {
+                    OkxMessage::L2Update(update) => {
                         let sub = map
                             .get(&format!(
                                 "{}|{}",
-                                quote.arg.instrument_id,
+                                update.arg.instrument_id,
                                 Self::L2_QUOTE_CHANNEL
                             ))
                             .expect("unable to find matching subscription");
 
                         return Some(MarketData::from((
                             sub.instrument.clone(),
-                            quote.data[0].clone(),
+                            update.data[0].clone(),
                         )));
                     }
                 }
@@ -288,7 +288,7 @@ impl From<(Instrument, OkxL2Data)> for MarketData {
             instrument,
             venue_time: quote.timestamp,
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
         }
     }
 }

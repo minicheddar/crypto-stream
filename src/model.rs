@@ -144,9 +144,16 @@ pub struct OrderBook {
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
+pub struct OrderBookUpdate {
+    pub bids: Option<Vec<OrderBookLevel>>,
+    pub asks: Option<Vec<OrderBookLevel>>,
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum MarketDataKind {
     Trade(Trade),
-    QuoteL2(OrderBook),
+    L2Snapshot(OrderBook),
+    L2Update(OrderBookUpdate)
 }
 
 pub fn from_str<'de, D, T>(value: D) -> Result<T, D::Error>

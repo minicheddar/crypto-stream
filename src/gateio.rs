@@ -77,19 +77,19 @@ impl GateIO {
                 let map = stream_subscriptions.lock().unwrap();
 
                 match serde_json::from_str(&json).unwrap() {
-                    GateIOMessage::Trade(trade) => {
+                    GateMessage::Trade(trade) => {
                         let sub = map
                             .get(&format!("{}|{}", trade.result.symbol, trade.channel))
                             .expect("unable to find matching subscription");
 
                         return Some(MarketData::from((sub.instrument.clone(), trade.result)));
                     }
-                    GateIOMessage::L2Update(quote) => {
+                    GateMessage::L2Update(update) => {
                         let sub = map
-                            .get(&format!("{}|{}", quote.result.symbol, quote.channel))
+                            .get(&format!("{}|{}", update.result.symbol, update.channel))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), quote.result)));
+                        return Some(MarketData::from((sub.instrument.clone(), update.result)));
                     }
                 }
             }
@@ -152,15 +152,15 @@ impl WebsocketSubscriber for GateIO {
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum GateIOMessage {
-    Trade(GateIOTrade),
+pub enum GateMessage {
+    Trade(GateTrade),
 
-    L2Update(GateIOL2Update),
+    L2Update(GateL2Update),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateIOTrade {
+pub struct GateTrade {
     #[serde(alias = "time_ms", deserialize_with = "from_unix_epoch_ms")]
     pub timestamp: DateTime<Utc>,
 
@@ -168,12 +168,12 @@ pub struct GateIOTrade {
 
     pub event: String,
 
-    pub result: GateIOTradeData,
+    pub result: GateTradeData,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateIOTradeData {
+pub struct GateTradeData {
     pub id: u64,
 
     #[serde(alias = "create_time_ms", deserialize_with = "from_str_unix_epoch_ms")]
@@ -191,8 +191,8 @@ pub struct GateIOTradeData {
     pub price: f64,
 }
 
-impl From<(Instrument, GateIOTradeData)> for MarketData {
-    fn from((instrument, trade): (Instrument, GateIOTradeData)) -> Self {
+impl From<(Instrument, GateTradeData)> for MarketData {
+    fn from((instrument, trade): (Instrument, GateTradeData)) -> Self {
         Self {
             venue: Venue::GateIO,
             instrument,
@@ -210,7 +210,7 @@ impl From<(Instrument, GateIOTradeData)> for MarketData {
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateIOL2Update {
+pub struct GateL2Update {
     #[serde(alias = "time_ms", deserialize_with = "from_unix_epoch_ms")]
     pub timestamp: DateTime<Utc>,
 
@@ -218,12 +218,12 @@ pub struct GateIOL2Update {
 
     pub event: String,
 
-    pub result: GateIOL2Data,
+    pub result: GateL2Data,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateIOL2Data {
+pub struct GateL2Data {
     #[serde(alias = "t", deserialize_with = "from_unix_epoch_ms")]
     pub timestamp: DateTime<Utc>,
 
@@ -238,14 +238,14 @@ pub struct GateIOL2Data {
     pub asks: Vec<OrderBookLevel>,
 }
 
-impl From<(Instrument, GateIOL2Data)> for MarketData {
-    fn from((instrument, quote): (Instrument, GateIOL2Data)) -> Self {
+impl From<(Instrument, GateL2Data)> for MarketData {
+    fn from((instrument, quote): (Instrument, GateL2Data)) -> Self {
         Self {
             venue: Venue::GateIO,
             instrument,
             venue_time: quote.timestamp,
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook {
+            kind: MarketDataKind::L2Snapshot(OrderBook {
                 bids: quote.bids,
                 asks: quote.asks,
             }),
@@ -263,14 +263,14 @@ mod tests {
         let input = r#"{"time":1672832218,"time_ms":1672832218641,"channel":"spot.trades","event":"update","result":{"id":4862947666,"create_time":1672832218,"create_time_ms":"1672832218630.0","side":"sell","currency_pair":"BTC_USDT","amount":"0.0001","price":"16850.4"}}"#;
 
         assert_eq!(
-            serde_json::from_str::<GateIOMessage>(input).expect("failed to deserialise"),
-            GateIOMessage::Trade(GateIOTrade {
+            serde_json::from_str::<GateMessage>(input).expect("failed to deserialise"),
+            GateMessage::Trade(GateTrade {
                 timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:36:58.641Z")
                     .unwrap()
                     .with_timezone(&Utc),
                 channel: "spot.trades".to_string(),
                 event: "update".to_string(),
-                result: GateIOTradeData {
+                result: GateTradeData {
                     id: 4862947666,
                     timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:36:58.630Z")
                         .unwrap()
@@ -289,14 +289,14 @@ mod tests {
         let input = r#"{"time":1672832986,"time_ms":1672832986322,"channel":"spot.order_book","event":"update","result":{"t":1672832986308,"lastUpdateId":10436902160,"s":"BTC_USDT","bids":[["16842.5","0.0001"],["16842.4","0.0001"]],"asks":[["16842.6","0.0001"],["16842.9","0.0004"]]}}"#;
 
         assert_eq!(
-            serde_json::from_str::<GateIOMessage>(input).expect("failed to deserialise"),
-            GateIOMessage::L2Update(GateIOL2Update {
+            serde_json::from_str::<GateMessage>(input).expect("failed to deserialise"),
+            GateMessage::L2Update(GateL2Update {
                 timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.322Z")
                     .unwrap()
                     .with_timezone(&Utc),
                 channel: "spot.order_book".to_string(),
                 event: "update".to_string(),
-                result: GateIOL2Data {
+                result: GateL2Data {
                     timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.308Z")
                         .unwrap()
                         .with_timezone(&Utc),

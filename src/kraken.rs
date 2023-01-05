@@ -97,20 +97,20 @@ impl Kraken {
 
                         return Some(MarketData::from((sub.instrument.clone(), snapshot)));
                     }
-                    KrakenMessage::L2UpdateSingle(quote) => {
+                    KrakenMessage::L2UpdateSingle(update) => {
                         let sub = map
-                            .get(&format!("{}|{}", quote.symbol, quote.channel_name))
+                            .get(&format!("{}|{}", update.symbol, update.channel_name))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), quote)));
+                        return Some(MarketData::from((sub.instrument.clone(), update)));
                     }
-                    KrakenMessage::L2UpdateDouble(quote) => {
+                    KrakenMessage::L2UpdateDouble(update) => {
                         // println!("{:?}", quote);
                         let sub = map
-                            .get(&format!("{}|{}", quote.symbol, quote.channel_name))
+                            .get(&format!("{}|{}", update.symbol, update.channel_name))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), quote)));
+                        return Some(MarketData::from((sub.instrument.clone(), update)));
                     }
                 }
             }
@@ -302,7 +302,7 @@ impl From<(Instrument, KrakenSnapshot)> for MarketData {
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
         }
     }
 }
@@ -371,7 +371,7 @@ impl From<(Instrument, KrakenL2UpdateSingle)> for MarketData {
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
         }
     }
 }
@@ -441,7 +441,7 @@ impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook {
+            kind: MarketDataKind::L2Snapshot(OrderBook {
                 bids: vec![],
                 asks: vec![],
             }),

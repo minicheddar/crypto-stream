@@ -87,12 +87,12 @@ impl Coinbase {
 
                         return Some(MarketData::from((sub.instrument.clone(), snapshot)));
                     }
-                    CoinbaseMessage::L2Update(l2) => {
+                    CoinbaseMessage::L2Update(update) => {
                         let sub = map
-                            .get(&format!("{}|l2update", l2.product_id))
+                            .get(&format!("{}|l2update", update.product_id))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), l2)));
+                        return Some(MarketData::from((sub.instrument.clone(), update)));
                     }
                 }
             }
@@ -243,7 +243,7 @@ impl From<(Instrument, CoinbaseSnapshot)> for MarketData {
             instrument,
             venue_time: Utc::now(),
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook {
+            kind: MarketDataKind::L2Snapshot(OrderBook {
                 bids: snapshot.bids,
                 asks: snapshot.asks,
             }),
@@ -273,8 +273,8 @@ pub struct CoinbaseL2Update {
 }
 
 impl From<(Instrument, CoinbaseL2Update)> for MarketData {
-    fn from((instrument, l2): (Instrument, CoinbaseL2Update)) -> Self {
-        let bids = l2
+    fn from((instrument, update): (Instrument, CoinbaseL2Update)) -> Self {
+        let bids = update
             .changes
             .iter()
             .filter(|x| x.side == Side::Buy)
@@ -284,7 +284,7 @@ impl From<(Instrument, CoinbaseL2Update)> for MarketData {
             })
             .collect();
 
-        let asks = l2
+        let asks = update
             .changes
             .iter()
             .filter(|x| x.side == Side::Sell)
@@ -299,7 +299,7 @@ impl From<(Instrument, CoinbaseL2Update)> for MarketData {
             instrument,
             venue_time: Utc::now(),
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
         }
     }
 }

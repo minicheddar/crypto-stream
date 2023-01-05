@@ -82,12 +82,12 @@ impl BinanceSpot {
 
                         return Some(MarketData::from((sub.instrument.clone(), trade)));
                     }
-                    BinanceMessage::L2Quote(quote) => {
+                    BinanceMessage::Snapshot(snapshot) => {
                         let sub = map
-                            .get(&format!("{}|{}", quote.symbol, Self::L2_QUOTE_CHANNEL))
+                            .get(&format!("{}|{}", snapshot.symbol, Self::L2_QUOTE_CHANNEL))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), quote)));
+                        return Some(MarketData::from((sub.instrument.clone(), snapshot)));
                     }
                 }
             }
@@ -151,7 +151,7 @@ pub enum BinanceMessage {
     Trade(BinanceTrade),
 
     #[serde(alias = "depthUpdate")]
-    L2Quote(BinanceL2Quote),
+    Snapshot(BinanceSnapshot),
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
@@ -202,7 +202,7 @@ impl From<(Instrument, BinanceTrade)> for MarketData {
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
-pub struct BinanceL2Quote {
+pub struct BinanceSnapshot {
     #[serde(alias = "E", deserialize_with = "from_unix_epoch_ms")]
     pub event_time: DateTime<Utc>,
 
@@ -222,14 +222,14 @@ pub struct BinanceL2Quote {
     pub asks: Vec<OrderBookLevel>,
 }
 
-impl From<(Instrument, BinanceL2Quote)> for MarketData {
-    fn from((instrument, quote): (Instrument, BinanceL2Quote)) -> Self {
+impl From<(Instrument, BinanceSnapshot)> for MarketData {
+    fn from((instrument, quote): (Instrument, BinanceSnapshot)) -> Self {
         Self {
             venue: Venue::BinanceSpot,
             instrument,
             venue_time: quote.event_time,
             received_time: Utc::now(),
-            kind: MarketDataKind::QuoteL2(OrderBook {
+            kind: MarketDataKind::L2Snapshot(OrderBook {
                 bids: quote.bids,
                 asks: quote.asks,
             }),
@@ -264,12 +264,12 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_json_to_l2_quote() {
+    fn deserialise_json_to_snapshot() {
         let input = r#"{"e":"depthUpdate","E":1672745259450,"s":"BNBUSDT","U":29961902358,"u":29961902414,"b":[["246.220","32.04"],["246.210","42.66"]],"a":[["246.230","40.84"],["246.240","39.10"]]}"#;
 
         assert_eq!(
             serde_json::from_str::<BinanceMessage>(input).expect("failed to deserialise"),
-            BinanceMessage::L2Quote(BinanceL2Quote {
+            BinanceMessage::Snapshot(BinanceSnapshot {
                 event_time: Utc.timestamp_millis_opt(1672745259450).unwrap(),
                 symbol: "BNBUSDT".to_string(),
                 first_update_id: 29961902358,
