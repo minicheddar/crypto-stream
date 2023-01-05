@@ -43,7 +43,7 @@ impl Kraken {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 
@@ -276,8 +276,8 @@ pub struct KrakenSnapshot {
 }
 
 impl From<(Instrument, KrakenSnapshot)> for MarketData {
-    fn from((instrument, quote): (Instrument, KrakenSnapshot)) -> Self {
-        let bids = quote
+    fn from((instrument, snapshot): (Instrument, KrakenSnapshot)) -> Self {
+        let bids = snapshot
             .data
             .bids
             .iter()
@@ -287,7 +287,7 @@ impl From<(Instrument, KrakenSnapshot)> for MarketData {
             })
             .collect();
 
-        let asks = quote
+        let asks = snapshot
             .data
             .asks
             .iter()
@@ -343,8 +343,8 @@ pub struct KrakenL2UpdateSingle {
 }
 
 impl From<(Instrument, KrakenL2UpdateSingle)> for MarketData {
-    fn from((instrument, quote): (Instrument, KrakenL2UpdateSingle)) -> Self {
-        let bids = quote
+    fn from((instrument, update): (Instrument, KrakenL2UpdateSingle)) -> Self {
+        let bids = update
             .data
             .bids
             .iter()
@@ -355,7 +355,7 @@ impl From<(Instrument, KrakenL2UpdateSingle)> for MarketData {
             })
             .collect();
 
-        let asks = quote
+        let asks = update
             .data
             .asks
             .iter()
@@ -371,7 +371,7 @@ impl From<(Instrument, KrakenL2UpdateSingle)> for MarketData {
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Update(OrderBook { bids, asks }),
         }
     }
 }
@@ -390,9 +390,9 @@ pub struct KrakenL2UpdateDouble {
 }
 
 impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
-    fn from((instrument, quote): (Instrument, KrakenL2UpdateDouble)) -> Self {
+    fn from((instrument, update): (Instrument, KrakenL2UpdateDouble)) -> Self {
         // TODO: MERGE THESE TOGETHER
-        let _bids1: Vec<OrderBookLevel> = quote
+        let _bids1: Vec<OrderBookLevel> = update
             .data1
             .bids
             .iter()
@@ -403,7 +403,7 @@ impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
             })
             .collect();
 
-        let _bids2: Vec<OrderBookLevel> = quote
+        let _bids2: Vec<OrderBookLevel> = update
             .data2
             .bids
             .iter()
@@ -414,7 +414,7 @@ impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
             })
             .collect();
 
-        let _asks1: Vec<OrderBookLevel> = quote
+        let _asks1: Vec<OrderBookLevel> = update
             .data1
             .asks
             .iter()
@@ -425,7 +425,7 @@ impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
             })
             .collect();
 
-        let _asks2: Vec<OrderBookLevel> = quote
+        let _asks2: Vec<OrderBookLevel> = update
             .data2
             .asks
             .iter()
@@ -441,7 +441,7 @@ impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::L2Snapshot(OrderBook {
+            kind: MarketDataKind::L2Update(OrderBook {
                 bids: vec![],
                 asks: vec![],
             }),
@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_snapshot_json_to_l2_quote() {
+    fn deserialise_json_to_snapshot() {
         let input = r#"[336,{"as":[["16835.00000","0.16686808","1672847524.720055"],["16838.30000","0.47317063","1672847522.867256"]],"bs":[["16834.90000","5.36202364","1672847529.231729"],["16834.40000","4.39497549","1672847529.170574"]]},"book-10","XBT/USD"]"#;
 
         assert_eq!(
@@ -555,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_single_payload_json_to_l2_quote() {
+    fn deserialise_json_to_single_payload_l2_update() {
         let input = r#"[336,{"b":[["16802.10000","0.00000000","1672845724.467174"],["16800.70000","0.38922671","1672845714.146221","r"]],"c":"2138871801"},"book-10","XBT/USD"]"#;
 
         assert_eq!(
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_double_payload_json_to_l2_quote() {
+    fn deserialise_json_to_double_payload_l2_update() {
         let input = r#"[336,{"a":[["16781.30000","0.00000000","1672845081.666864"],["16783.30000","0.22450899","1672845077.409939","r"]]},{"b":[["16781.00000","0.02396342","1672845081.667161"],["16781.00000","0.02085587","1672845081.667277"]],"c":"791170235"},"book-10","XBT/USD"]"#;
 
         assert_eq!(

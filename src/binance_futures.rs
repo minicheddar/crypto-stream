@@ -43,7 +43,7 @@ impl BinanceFutures {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 

@@ -23,7 +23,7 @@ impl WebsocketClient {
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum WebsocketSubscriptionKind {
     Trade,
-    L2Quote,
+    Quote,
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]

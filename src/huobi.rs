@@ -44,7 +44,7 @@ impl Huobi {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 
@@ -101,15 +101,15 @@ impl Huobi {
                             .expect("unable to send huobi pong");
                         return None;
                     }
-                    HuobiMessage::L2Update(update) => {
+                    HuobiMessage::Snapshot(snapshot) => {
                         let sub = map
-                            .get(&update.channel)
+                            .get(&snapshot.channel)
                             .expect("unable to find matching subscription");
 
                         return Some(MarketData::from((
                             sub.instrument.clone(),
-                            update.response_timestamp,
-                            update.tick.clone(),
+                            snapshot.response_timestamp,
+                            snapshot.tick.clone(),
                         )));
                     }
                 }
@@ -171,7 +171,7 @@ pub enum HuobiMessage {
 
     Trade(HuobiTrade),
 
-    L2Update(HuobiL2Update),
+    Snapshot(HuobiSnapshot),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -247,19 +247,19 @@ impl From<(Instrument, HuobiTradeData)> for MarketData {
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HuobiL2Update {
+pub struct HuobiSnapshot {
     #[serde(alias = "ch")]
     pub channel: String,
 
     #[serde(alias = "ts", deserialize_with = "from_unix_epoch_ms")]
     pub response_timestamp: DateTime<Utc>,
 
-    pub tick: HuobiL2Tick,
+    pub tick: HuobiSnapshotTick,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HuobiL2Tick {
+pub struct HuobiSnapshotTick {
     #[serde(alias = "seqNum")]
     pub sequence_number: u64,
 
@@ -275,9 +275,9 @@ pub struct HuobiLevel {
     pub quantity: f64,
 }
 
-impl From<(Instrument, DateTime<Utc>, HuobiL2Tick)> for MarketData {
-    fn from((instrument, timestamp, quote): (Instrument, DateTime<Utc>, HuobiL2Tick)) -> Self {
-        let bids = quote
+impl From<(Instrument, DateTime<Utc>, HuobiSnapshotTick)> for MarketData {
+    fn from((instrument, timestamp, snapshot): (Instrument, DateTime<Utc>, HuobiSnapshotTick)) -> Self {
+        let bids = snapshot
             .bids
             .iter()
             .map(|x| OrderBookLevel {
@@ -286,7 +286,7 @@ impl From<(Instrument, DateTime<Utc>, HuobiL2Tick)> for MarketData {
             })
             .collect();
 
-        let asks = quote
+        let asks = snapshot
             .asks
             .iter()
             .map(|x| OrderBookLevel {
@@ -341,17 +341,17 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_json_to_l2_update() {
+    fn deserialise_json_to_snapshot() {
         let input = r#"{"ch":"market.btcusdt.mbp.refresh.10","ts":1672825916217,"tick":{"seqNum":161573989890,"bids":[[16840.68,0.76565],[16840.0,0.653206]],"asks":[[16840.69,1.365447],[16841.55,0.3]]}}"#;
 
         assert_eq!(
             serde_json::from_str::<HuobiMessage>(input).expect("failed to deserialise"),
-            HuobiMessage::L2Update(HuobiL2Update {
+            HuobiMessage::Snapshot(HuobiSnapshot {
                 channel: "market.btcusdt.mbp.refresh.10".to_string(),
                 response_timestamp: DateTime::parse_from_rfc3339("2023-01-04T09:51:56.217Z")
                     .unwrap()
                     .with_timezone(&Utc),
-                tick: HuobiL2Tick {
+                tick: HuobiSnapshotTick {
                     sequence_number: 161573989890,
                     bids: vec![
                         HuobiLevel {

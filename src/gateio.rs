@@ -44,7 +44,7 @@ impl GateIO {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 
@@ -84,12 +84,12 @@ impl GateIO {
 
                         return Some(MarketData::from((sub.instrument.clone(), trade.result)));
                     }
-                    GateMessage::L2Update(update) => {
+                    GateMessage::Snapshot(snapshot) => {
                         let sub = map
-                            .get(&format!("{}|{}", update.result.symbol, update.channel))
+                            .get(&format!("{}|{}", snapshot.result.symbol, snapshot.channel))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), update.result)));
+                        return Some(MarketData::from((sub.instrument.clone(), snapshot.result)));
                     }
                 }
             }
@@ -123,7 +123,7 @@ impl WebsocketSubscriber for GateIO {
                 // subscribe to market / channel
                 let payload = match sub.kind {
                     WebsocketSubscriptionKind::Trade => vec![market],
-                    WebsocketSubscriptionKind::L2Quote => {
+                    WebsocketSubscriptionKind::Quote => {
                         vec![market, Self::QUOTE_DEPTH.to_string(), "100ms".to_string()]
                     }
                 };
@@ -155,7 +155,7 @@ impl WebsocketSubscriber for GateIO {
 pub enum GateMessage {
     Trade(GateTrade),
 
-    L2Update(GateL2Update),
+    Snapshot(GateSnapshot),
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -210,7 +210,7 @@ impl From<(Instrument, GateTradeData)> for MarketData {
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateL2Update {
+pub struct GateSnapshot {
     #[serde(alias = "time_ms", deserialize_with = "from_unix_epoch_ms")]
     pub timestamp: DateTime<Utc>,
 
@@ -218,12 +218,12 @@ pub struct GateL2Update {
 
     pub event: String,
 
-    pub result: GateL2Data,
+    pub result: GateSnapshotData,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GateL2Data {
+pub struct GateSnapshotData {
     #[serde(alias = "t", deserialize_with = "from_unix_epoch_ms")]
     pub timestamp: DateTime<Utc>,
 
@@ -238,16 +238,16 @@ pub struct GateL2Data {
     pub asks: Vec<OrderBookLevel>,
 }
 
-impl From<(Instrument, GateL2Data)> for MarketData {
-    fn from((instrument, quote): (Instrument, GateL2Data)) -> Self {
+impl From<(Instrument, GateSnapshotData)> for MarketData {
+    fn from((instrument, snapshot): (Instrument, GateSnapshotData)) -> Self {
         Self {
             venue: Venue::GateIO,
             instrument,
-            venue_time: quote.timestamp,
+            venue_time: snapshot.timestamp,
             received_time: Utc::now(),
             kind: MarketDataKind::L2Snapshot(OrderBook {
-                bids: quote.bids,
-                asks: quote.asks,
+                bids: snapshot.bids,
+                asks: snapshot.asks,
             }),
         }
     }
@@ -285,18 +285,18 @@ mod tests {
     }
 
     #[test]
-    fn deserialise_json_to_l2_update() {
+    fn deserialise_json_to_snapshot() {
         let input = r#"{"time":1672832986,"time_ms":1672832986322,"channel":"spot.order_book","event":"update","result":{"t":1672832986308,"lastUpdateId":10436902160,"s":"BTC_USDT","bids":[["16842.5","0.0001"],["16842.4","0.0001"]],"asks":[["16842.6","0.0001"],["16842.9","0.0004"]]}}"#;
 
         assert_eq!(
             serde_json::from_str::<GateMessage>(input).expect("failed to deserialise"),
-            GateMessage::L2Update(GateL2Update {
+            GateMessage::Snapshot(GateSnapshot {
                 timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.322Z")
                     .unwrap()
                     .with_timezone(&Utc),
                 channel: "spot.order_book".to_string(),
                 event: "update".to_string(),
-                result: GateL2Data {
+                result: GateSnapshotData {
                     timestamp: DateTime::parse_from_rfc3339("2023-01-04T11:49:46.308Z")
                         .unwrap()
                         .with_timezone(&Utc),

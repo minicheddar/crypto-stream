@@ -41,7 +41,7 @@ impl Coinbase {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 
@@ -299,7 +299,7 @@ impl From<(Instrument, CoinbaseL2Update)> for MarketData {
             instrument,
             venue_time: Utc::now(),
             received_time: Utc::now(),
-            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
+            kind: MarketDataKind::L2Update(OrderBook { bids, asks }),
         }
     }
 }

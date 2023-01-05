@@ -43,7 +43,7 @@ impl Okx {
 
         let channel = match sub.kind {
             WebsocketSubscriptionKind::Trade => Self::TRADE_CHANNEL,
-            WebsocketSubscriptionKind::L2Quote => Self::L2_QUOTE_CHANNEL,
+            WebsocketSubscriptionKind::Quote => Self::L2_QUOTE_CHANNEL,
             // _ => panic!("WebsocketSubscriptionKind not supported for exchange"),
         };
 
@@ -100,6 +100,7 @@ impl Okx {
 
                         return Some(MarketData::from((
                             sub.instrument.clone(),
+                            update.action,
                             update.data[0].clone(),
                         )));
                     }
@@ -157,7 +158,7 @@ impl WebsocketSubscriber for Okx {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum OkxMessage {
     Trade(OkxTrade),
@@ -165,7 +166,7 @@ pub enum OkxMessage {
     L2Update(OkxL2Update),
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OkxArg {
     pub channel: String,
@@ -174,7 +175,7 @@ pub struct OkxArg {
     pub instrument_id: String,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OkxAction {
     Update,
@@ -182,14 +183,14 @@ pub enum OkxAction {
     Snapshot,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OkxTrade {
     pub arg: OkxArg,
     pub data: Vec<OkxTradeData>,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OkxTradeData {
     #[serde(alias = "instId")]
@@ -227,7 +228,7 @@ impl From<(Instrument, OkxTradeData)> for MarketData {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OkxL2Update {
     pub arg: OkxArg,
@@ -235,7 +236,7 @@ pub struct OkxL2Update {
     pub data: Vec<OkxL2Data>,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OkxL2Data {
     pub bids: Vec<OkxLevel>,
@@ -248,7 +249,7 @@ pub struct OkxL2Data {
     pub checksum: i64,
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub struct OkxLevel {
     #[serde(deserialize_with = "from_str")]
     pub price: f64,
@@ -263,9 +264,9 @@ pub struct OkxLevel {
     pub num_orders_at_level: i64,
 }
 
-impl From<(Instrument, OkxL2Data)> for MarketData {
-    fn from((instrument, quote): (Instrument, OkxL2Data)) -> Self {
-        let bids = quote
+impl From<(Instrument, OkxAction, OkxL2Data)> for MarketData {
+    fn from((instrument, action, update): (Instrument, OkxAction, OkxL2Data)) -> Self {
+        let bids = update
             .bids
             .iter()
             .map(|x| OrderBookLevel {
@@ -274,7 +275,7 @@ impl From<(Instrument, OkxL2Data)> for MarketData {
             })
             .collect();
 
-        let asks = quote
+        let asks = update
             .asks
             .iter()
             .map(|x| OrderBookLevel {
@@ -283,12 +284,17 @@ impl From<(Instrument, OkxL2Data)> for MarketData {
             })
             .collect();
 
+        let kind = match action {
+            OkxAction::Snapshot => MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
+            OkxAction::Update => MarketDataKind::L2Update(OrderBook { bids, asks }),
+        };
+
         Self {
             venue: Venue::Okx,
             instrument,
-            venue_time: quote.timestamp,
+            venue_time: update.timestamp,
             received_time: Utc::now(),
-            kind: MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
+            kind,
         }
     }
 }
