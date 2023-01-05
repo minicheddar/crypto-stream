@@ -464,7 +464,7 @@ pub struct KrakenL2Data {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Side;
+    use crate::model::{Side, InstrumentKind};
 
     #[test]
     fn deserialise_json_to_trade() {
@@ -646,5 +646,73 @@ mod tests {
                 symbol: "XBT/USD".to_string()
             })
         )
+    }
+
+    #[test]
+    fn market_data_from_double_payload_l2_update() {
+        let input = KrakenL2UpdateDouble {
+            channel_id: 336,
+            data1: KrakenL2Data {
+                bids: Some(vec![
+                    KrakenLevel {
+                        price: 16781.30000,
+                        quantity: 0.25,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
+                    KrakenLevel {
+                        price: 16780.00000,
+                        quantity: 0.25,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:17Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: Some("r".to_string()),
+                    },
+                ]),
+                asks: None,
+                checksum: None,
+            },
+            data2: KrakenL2Data {
+                bids: Some(vec![
+                    KrakenLevel {
+                        price: 16781.30000,
+                        quantity: 0.25,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
+                    KrakenLevel {
+                        price: 16780.00000,
+                        quantity: 0.0,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:17Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: Some("r".to_string()),
+                    },
+                ]),
+                asks: None,
+                checksum: Some("791170235".to_string()),
+            },
+            channel_name: "book-10".to_string(),
+            symbol: "XBT/USD".to_string(),
+        };
+
+        let output = MarketData::from((
+            Instrument {
+                base: "XBT".to_string(),
+                quote: "USD".to_string(),
+                kind: InstrumentKind::Spot,
+            },
+            input,
+        ));
+
+        if let MarketDataKind::L2Update(ob) = &output.kind {
+            println!("{:?}", output);
+            assert_eq!(ob.bids.len(), 0);
+            assert_eq!(ob.asks.len(), 0);
+        }
     }
 }
