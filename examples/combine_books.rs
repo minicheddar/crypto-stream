@@ -35,15 +35,15 @@ async fn main() {
     let mut stream = subscriptions_into_stream(venue_subs).await;
 
     let mut books: HashMap<Venue, LimitOrderBook> = HashMap::new();
+    const DEPTH: usize = 10;
 
     while let Some(msg) = stream.next().await {
         match msg.kind {
             MarketDataKind::Trade(_) => todo!(),
             MarketDataKind::L2Snapshot(snapshot) => {
-                let bids = levels_to_map(snapshot.bids);
-                let asks = levels_to_map(snapshot.asks);
+                let bids = levels_to_map(snapshot.bids, DEPTH);
+                let asks = levels_to_map(snapshot.asks, DEPTH);
 
-                // TODO: only take 10 from each side
                 books
                     .entry(msg.venue)
                     .and_modify(|x| {

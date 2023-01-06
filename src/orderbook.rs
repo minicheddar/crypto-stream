@@ -33,8 +33,10 @@ impl LimitOrderBook {
     }
 }
 
-pub fn levels_to_map(levels: Vec<OrderBookLevel>) -> LevelMap {
+pub fn levels_to_map(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMap {
     levels
+        .split_at(depth)
+        .0
         .iter()
         .map(|x| {
             (
