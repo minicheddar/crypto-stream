@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +12,8 @@ use crate::websocket::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -389,62 +391,51 @@ pub struct KrakenL2UpdateDouble {
     pub symbol: String,
 }
 
+fn flatten_levels(
+    vec1: Option<Vec<KrakenLevel>>,
+    vec2: Option<Vec<KrakenLevel>>,
+) -> Vec<OrderBookLevel> {
+    vec1.iter()
+        .flatten()
+        .chain(vec2.iter().flatten())
+        .map(|level| OrderBookLevel {
+            price: level.price,
+            quantity: level.quantity,
+        })
+        .collect()
+}
+
+fn fold_levels(vec: Vec<OrderBookLevel>) -> Vec<OrderBookLevel> {
+    vec.into_iter()
+        .fold(BTreeMap::new(), |mut map, level| {
+            map.entry(Decimal::from_f64(level.price).unwrap())
+                .and_modify(|x: &mut OrderBookLevel| x.quantity += level.quantity)
+                .or_insert(OrderBookLevel {
+                    price: level.price,
+                    quantity: level.quantity,
+                });
+            map
+        })
+        .into_iter()
+        .map(|(_, v)| v)
+        .collect()
+}
+
 impl From<(Instrument, KrakenL2UpdateDouble)> for MarketData {
     fn from((instrument, update): (Instrument, KrakenL2UpdateDouble)) -> Self {
-        // TODO: MERGE THESE TOGETHER
-        let _bids1: Vec<OrderBookLevel> = update
-            .data1
-            .bids
-            .iter()
-            .flatten()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
+        let flat_bids = flatten_levels(update.data1.bids, update.data2.bids);
+        let mut bids = fold_levels(flat_bids);
+        bids.reverse(); // BTreeMap in fold_levels() sorts prices ASC order, bids need to be DESC order
 
-        let _bids2: Vec<OrderBookLevel> = update
-            .data2
-            .bids
-            .iter()
-            .flatten()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
-
-        let _asks1: Vec<OrderBookLevel> = update
-            .data1
-            .asks
-            .iter()
-            .flatten()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
-
-        let _asks2: Vec<OrderBookLevel> = update
-            .data2
-            .asks
-            .iter()
-            .flatten()
-            .map(|x| OrderBookLevel {
-                price: x.price,
-                quantity: x.quantity,
-            })
-            .collect();
+        let flat_asks = flatten_levels(update.data1.asks, update.data2.asks);
+        let asks = fold_levels(flat_asks);
 
         Self {
             venue: Venue::Kraken,
             instrument,
             venue_time: Utc::now(), // TODO: make this optional
             received_time: Utc::now(),
-            kind: MarketDataKind::L2Update(OrderBook {
-                bids: vec![],
-                asks: vec![],
-            }),
+            kind: MarketDataKind::L2Update(OrderBook { bids, asks }),
         }
     }
 }
@@ -464,7 +455,7 @@ pub struct KrakenL2Data {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Side, InstrumentKind};
+    use crate::model::{InstrumentKind, Side};
 
     #[test]
     fn deserialise_json_to_trade() {
@@ -663,6 +654,14 @@ mod tests {
                         republished: None,
                     },
                     KrakenLevel {
+                        price: 16779.00000,
+                        quantity: 0.1,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:17Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: Some("r".to_string()),
+                    },
+                    KrakenLevel {
                         price: 16780.00000,
                         quantity: 0.25,
                         timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:17Z")
@@ -671,19 +670,28 @@ mod tests {
                         republished: Some("r".to_string()),
                     },
                 ]),
-                asks: None,
-                checksum: None,
-            },
-            data2: KrakenL2Data {
-                bids: Some(vec![
+                asks: Some(vec![
                     KrakenLevel {
-                        price: 16781.30000,
-                        quantity: 0.25,
+                        price: 16782.1,
+                        quantity: 1.5,
                         timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
                             .unwrap()
                             .with_timezone(&Utc),
                         republished: None,
                     },
+                    KrakenLevel {
+                        price: 16782.0,
+                        quantity: 1.5,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
+                ]),
+                checksum: None,
+            },
+            data2: KrakenL2Data {
+                bids: Some(vec![
                     KrakenLevel {
                         price: 16780.00000,
                         quantity: 0.0,
@@ -692,8 +700,33 @@ mod tests {
                             .with_timezone(&Utc),
                         republished: Some("r".to_string()),
                     },
+                    KrakenLevel {
+                        price: 16781.30000,
+                        quantity: 0.25,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
                 ]),
-                asks: None,
+                asks: Some(vec![
+                    KrakenLevel {
+                        price: 16782.5,
+                        quantity: 1.5,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
+                    KrakenLevel {
+                        price: 16782.1,
+                        quantity: 1.5,
+                        timestamp: DateTime::parse_from_rfc3339("2023-01-04T15:11:21Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                        republished: None,
+                    },
+                ]),
                 checksum: Some("791170235".to_string()),
             },
             channel_name: "book-10".to_string(),
@@ -710,9 +743,12 @@ mod tests {
         ));
 
         if let MarketDataKind::L2Update(ob) = &output.kind {
-            println!("{:?}", output);
-            assert_eq!(ob.bids.len(), 0);
-            assert_eq!(ob.asks.len(), 0);
+            assert_eq!(ob.bids[0], OrderBookLevel { price: 16781.3, quantity: 0.5});
+            assert_eq!(ob.bids[1], OrderBookLevel { price: 16780.0, quantity: 0.25});
+            assert_eq!(ob.bids[2], OrderBookLevel { price: 16779.0, quantity: 0.1});
+            assert_eq!(ob.asks[0], OrderBookLevel { price: 16782.0, quantity: 1.5});
+            assert_eq!(ob.asks[1], OrderBookLevel { price: 16782.1, quantity: 3.0});
+            assert_eq!(ob.asks[2], OrderBookLevel { price: 16782.5, quantity: 1.5});
         }
     }
 }
