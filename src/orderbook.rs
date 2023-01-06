@@ -33,7 +33,7 @@ impl LimitOrderBook {
     }
 }
 
-pub fn levels_to_map(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMap {
+pub fn levels_to_orderbook(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMap {
     levels
         .split_at(depth)
         .0
@@ -50,14 +50,16 @@ pub fn levels_to_map(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMap {
         .collect::<BTreeMap<Decimal, Level>>()
 }
 
-pub fn merge_books(a: LevelMap, b: LevelMap) -> LevelMap {
-    a.into_iter()
+pub fn merge_orderbooks(a: &LevelMap, b: &LevelMap) -> LevelMap {
+    let mut book = a
+        .into_iter()
         .chain(b)
-        .filter(|(_, level)| level.quantity != dec!(0))
         .fold(BTreeMap::new(), |mut map, (price, level)| {
-            map.entry(price)
-                .and_modify(|l| l.quantity += level.quantity)
-                .or_insert(level);
+            map.entry(*price)
+                .and_modify(|l: &mut Level| l.quantity += level.quantity)
+                .or_insert(*level);
             map
-        })
+        });
+    book.retain(|_, level| level.quantity != dec!(0));
+    book
 }

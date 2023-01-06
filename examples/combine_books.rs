@@ -5,7 +5,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 use crypto_stream::{
     build_venue_subscriptions,
     model::*,
-    orderbook::{levels_to_map, LimitOrderBook},
+    orderbook::{levels_to_orderbook, merge_orderbooks, LimitOrderBook},
     subscriptions_into_stream,
     websocket::{WebsocketSubscription, WebsocketSubscriptionKind},
 };
@@ -39,10 +39,9 @@ async fn main() {
 
     while let Some(msg) = stream.next().await {
         match msg.kind {
-            MarketDataKind::Trade(_) => todo!(),
             MarketDataKind::L2Snapshot(snapshot) => {
-                let bids = levels_to_map(snapshot.bids, DEPTH);
-                let asks = levels_to_map(snapshot.asks, DEPTH);
+                let bids = levels_to_orderbook(snapshot.bids, DEPTH);
+                let asks = levels_to_orderbook(snapshot.asks, DEPTH);
 
                 books
                     .entry(msg.venue)
@@ -52,7 +51,19 @@ async fn main() {
                     })
                     .or_insert(LimitOrderBook::new(bids, asks));
             }
-            MarketDataKind::L2Update(_) => {}
+            MarketDataKind::L2Update(update) => {
+                let bid_len = update.bids.len();
+                let bids = levels_to_orderbook(update.bids, bid_len);
+
+                let ask_len = update.asks.len();
+                let asks = levels_to_orderbook(update.asks, ask_len);
+
+                if let Some(book) = books.get_mut(&msg.venue) {
+                    book.bids = merge_orderbooks(&book.bids, &bids);
+                    book.asks = merge_orderbooks(&book.asks, &asks);
+                }
+            }
+            _ => continue,
         }
     }
 }
