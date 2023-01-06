@@ -1,13 +1,15 @@
-use crate::model::OrderBookLevel;
+use crate::model::{OrderBookLevel, Venue};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use rust_decimal_macros::dec;
 use std::{cmp::Ordering, collections::BTreeMap};
 
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Level {
     pub price: Decimal,
 
     pub quantity: Decimal,
+
+    pub venue: Venue,
 }
 
 impl PartialOrd for Level {
@@ -33,7 +35,7 @@ impl LimitOrderBook {
     }
 }
 
-pub fn levels_to_orderbook(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMap {
+pub fn levels_to_orderbook(levels: &Vec<OrderBookLevel>, venue: Venue, depth: usize) -> LevelMap {
     levels
         .split_at(depth)
         .0
@@ -44,6 +46,7 @@ pub fn levels_to_orderbook(levels: Vec<OrderBookLevel>, depth: usize) -> LevelMa
                 Level {
                     price: Decimal::from_f64(x.price).unwrap(),
                     quantity: Decimal::from_f64(x.quantity).unwrap(),
+                    venue,
                 },
             )
         })
@@ -57,7 +60,7 @@ pub fn merge_orderbooks(a: &LevelMap, b: &LevelMap) -> LevelMap {
         .fold(BTreeMap::new(), |mut map, (price, level)| {
             map.entry(*price)
                 .and_modify(|l: &mut Level| l.quantity += level.quantity)
-                .or_insert(*level);
+                .or_insert(level.clone());
             map
         });
     book.retain(|_, level| level.quantity != dec!(0));

@@ -2,15 +2,16 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+use chrono::Utc;
 use crypto_stream::{
     build_venue_subscriptions,
     model::*,
-    orderbook::{levels_to_orderbook, merge_orderbooks, LimitOrderBook},
+    orderbook::{levels_to_orderbook, merge_orderbooks, Level, LimitOrderBook},
     subscriptions_into_stream,
     websocket::{WebsocketSubscription, WebsocketSubscriptionKind},
 };
 use futures::StreamExt;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[tokio::main]
 async fn main() {
@@ -32,19 +33,21 @@ async fn main() {
     ];
 
     let venue_subs = build_venue_subscriptions(subscriptions);
-    let mut stream = subscriptions_into_stream(venue_subs).await;
+    let mut market_data = subscriptions_into_stream(venue_subs).await;
 
-    let mut books: HashMap<Venue, LimitOrderBook> = HashMap::new();
+    let mut exchange_books: HashMap<Venue, LimitOrderBook> = HashMap::new();
     const DEPTH: usize = 10;
 
-    while let Some(msg) = stream.next().await {
+    while let Some(msg) = market_data.next().await {
+        let now = Utc::now();
         match msg.kind {
             MarketDataKind::L2Snapshot(snapshot) => {
-                let bids = levels_to_orderbook(snapshot.bids, DEPTH);
-                let asks = levels_to_orderbook(snapshot.asks, DEPTH);
+                let venue = msg.venue.clone();
+                let bids = levels_to_orderbook(&snapshot.bids, venue, DEPTH);
+                let asks = levels_to_orderbook(&snapshot.asks, venue, DEPTH);
 
-                books
-                    .entry(msg.venue)
+                exchange_books
+                    .entry(venue)
                     .and_modify(|x| {
                         x.bids = bids.clone();
                         x.asks = asks.clone();
@@ -52,18 +55,47 @@ async fn main() {
                     .or_insert(LimitOrderBook::new(bids, asks));
             }
             MarketDataKind::L2Update(update) => {
+                let venue = msg.venue.clone();
                 let bid_len = update.bids.len();
-                let bids = levels_to_orderbook(update.bids, bid_len);
+                let bids = levels_to_orderbook(&update.bids, venue, bid_len);
 
                 let ask_len = update.asks.len();
-                let asks = levels_to_orderbook(update.asks, ask_len);
+                let asks = levels_to_orderbook(&update.asks, venue, ask_len);
 
-                if let Some(book) = books.get_mut(&msg.venue) {
-                    book.bids = merge_orderbooks(&book.bids, &bids);
-                    book.asks = merge_orderbooks(&book.asks, &asks);
+                if let Some(ob) = exchange_books.get_mut(&venue) {
+                    ob.bids = merge_orderbooks(&ob.bids, &bids);
+                    ob.asks = merge_orderbooks(&ob.asks, &asks);
                 }
             }
             _ => continue,
         }
+
+        let combined_book = exchange_books.values().fold(
+            LimitOrderBook::new(BTreeMap::new(), BTreeMap::new()),
+            |mut combined_book, ob| {
+                combined_book.bids.extend(ob.bids.clone());
+                combined_book.asks.extend(ob.asks.clone());
+                combined_book
+            },
+        );
+
+        let bids: Vec<&Level> = combined_book
+            .bids
+            .values()
+            .into_iter()
+            .rev()
+            .take(DEPTH)
+            .collect();
+        let asks: Vec<&Level> = combined_book
+            .asks
+            .values()
+            .into_iter()
+            .take(DEPTH)
+            .collect();
+
+        let took = (Utc::now() - now).num_microseconds().unwrap();
+        println!("BIDS: {:?}", bids);
+        println!("ASKS: {:?}", asks);
+        println!("Combining orderbooks took: {took}us");
     }
 }

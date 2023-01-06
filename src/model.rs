@@ -87,7 +87,7 @@ pub enum Side {
     Sell,
 }
 
-#[derive(Clone, Eq, PartialEq, PartialOrd, Debug, Deserialize, Serialize, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Debug, Deserialize, Serialize, Hash)]
 pub enum Venue {
     BinanceFuturesUsd,
     BinanceSpot,
@@ -147,7 +147,7 @@ pub struct OrderBook {
 pub enum MarketDataKind {
     Trade(Trade),
     L2Snapshot(OrderBook),
-    L2Update(OrderBook)
+    L2Update(OrderBook),
 }
 
 pub fn from_str<'de, D, T>(value: D) -> Result<T, D::Error>
