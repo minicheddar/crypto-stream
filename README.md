@@ -16,9 +16,10 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
     * Huobi (Spot)
     * Gate.io (Spot)
     * Kraken (Spot)
+* Cross-exchange/unified order book building
 
 ## Roadmap:
-* Cross-exchange/unified order book building
+* Add unified orderbook visualisation
 * Add support for futures contracts
 * Add support for additional market data streams (liquidations, funding ticker, mark price)
 * Add support for additional sinks (mmap file, gRPC, zmq socket)
