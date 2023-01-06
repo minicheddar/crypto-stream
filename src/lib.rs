@@ -15,12 +15,13 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub mod binance_futures;
 pub mod binance_spot;
-pub mod kraken;
 pub mod coinbase;
 pub mod gateio;
 pub mod huobi;
+pub mod kraken;
 pub mod model;
 pub mod okx;
+pub mod orderbook;
 pub mod websocket;
 
 pub fn build_venue_subscriptions(
