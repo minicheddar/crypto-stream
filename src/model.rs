@@ -1,6 +1,6 @@
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{de, Deserialize, Serialize, Serializer};
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 pub struct Message {
     pub sequence: u64,
@@ -96,6 +96,20 @@ pub enum Venue {
     Huobi,
     Kraken,
     Okx,
+}
+
+impl Display for Venue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Venue::BinanceFuturesUsd => write!(f, "Binance (Futures)"),
+            Venue::BinanceSpot => write!(f, "Binance (Spot)"),
+            Venue::Coinbase => write!(f, "Coinbase (Spot)"),
+            Venue::GateIO => write!(f, "Gate.IO (Spot)"),
+            Venue::Huobi => write!(f, "Huobi (Spot)"),
+            Venue::Kraken => write!(f, "Kraken (Spot)"),
+            Venue::Okx => write!(f, "OKx (Spot)"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
