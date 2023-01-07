@@ -10,6 +10,14 @@ pub struct Level {
     pub quantity: Decimal,
 
     pub venue: Venue,
+
+    pub side: Side,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Side {
+    Bid,
+    Ask,
 }
 
 impl PartialOrd for Level {
@@ -35,7 +43,12 @@ impl LimitOrderBook {
     }
 }
 
-pub fn levels_to_orderbook(levels: &Vec<OrderBookLevel>, venue: Venue, depth: usize) -> LevelMap {
+pub fn levels_to_orderbook(
+    levels: &Vec<OrderBookLevel>,
+    venue: Venue,
+    side: Side,
+    depth: usize,
+) -> LevelMap {
     levels
         .split_at(depth)
         .0
@@ -47,6 +60,7 @@ pub fn levels_to_orderbook(levels: &Vec<OrderBookLevel>, venue: Venue, depth: us
                     price: Decimal::from_f64(x.price).unwrap(),
                     quantity: Decimal::from_f64(x.quantity).unwrap(),
                     venue,
+                    side,
                 },
             )
         })

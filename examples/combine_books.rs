@@ -6,7 +6,7 @@ use chrono::Utc;
 use crypto_stream::{
     build_venue_subscriptions,
     model::*,
-    orderbook::{levels_to_orderbook, merge_orderbooks, Level, LimitOrderBook},
+    orderbook::{levels_to_orderbook, merge_orderbooks, Level, LimitOrderBook, Side},
     subscriptions_into_stream,
     websocket::{WebsocketSubscription, WebsocketSubscriptionKind},
 };
@@ -43,8 +43,8 @@ async fn main() {
         match msg.kind {
             MarketDataKind::L2Snapshot(snapshot) => {
                 let venue = msg.venue.clone();
-                let bids = levels_to_orderbook(&snapshot.bids, venue, DEPTH);
-                let asks = levels_to_orderbook(&snapshot.asks, venue, DEPTH);
+                let bids = levels_to_orderbook(&snapshot.bids, venue, Side::Bid, DEPTH);
+                let asks = levels_to_orderbook(&snapshot.asks, venue, Side::Ask, DEPTH);
 
                 exchange_books
                     .entry(venue)
@@ -57,10 +57,10 @@ async fn main() {
             MarketDataKind::L2Update(update) => {
                 let venue = msg.venue.clone();
                 let bid_len = update.bids.len();
-                let bids = levels_to_orderbook(&update.bids, venue, bid_len);
+                let bids = levels_to_orderbook(&update.bids, venue, Side::Bid, bid_len);
 
                 let ask_len = update.asks.len();
-                let asks = levels_to_orderbook(&update.asks, venue, ask_len);
+                let asks = levels_to_orderbook(&update.asks, venue, Side::Ask, ask_len);
 
                 if let Some(ob) = exchange_books.get_mut(&venue) {
                     ob.bids = merge_orderbooks(&ob.bids, &bids);
