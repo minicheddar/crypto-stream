@@ -22,6 +22,7 @@ pub mod kraken;
 pub mod model;
 pub mod okx;
 pub mod orderbook;
+pub mod tui;
 pub mod websocket;
 
 pub fn build_venue_subscriptions(

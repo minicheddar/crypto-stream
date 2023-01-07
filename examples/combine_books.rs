@@ -3,15 +3,25 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 use chrono::Utc;
+use crossterm::{
+    event::EnableMouseCapture,
+    execute,
+    terminal::{enable_raw_mode, EnterAlternateScreen},
+};
 use crypto_stream::{
     build_venue_subscriptions,
     model::*,
     orderbook::{levels_to_orderbook, merge_orderbooks, Level, LimitOrderBook, Side},
     subscriptions_into_stream,
+    tui::render_orderbook,
     websocket::{WebsocketSubscription, WebsocketSubscriptionKind},
 };
 use futures::StreamExt;
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io,
+};
+use tui::{backend::CrosstermBackend, Terminal};
 
 #[tokio::main]
 async fn main() {
@@ -37,6 +47,13 @@ async fn main() {
 
     let mut exchange_books: HashMap<Venue, LimitOrderBook> = HashMap::new();
     const DEPTH: usize = 10;
+
+    // setup terminal
+    enable_raw_mode();
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture);
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).unwrap();
 
     while let Some(msg) = market_data.next().await {
         let now = Utc::now();
@@ -79,13 +96,10 @@ async fn main() {
             },
         );
 
-        let bids: Vec<&Level> = combined_book
-            .bids
-            .values()
-            .into_iter()
-            .rev()
-            .take(DEPTH)
-            .collect();
+        // println!("");
+        // println!("Combined bids BEFORE: {:?}", combined_book.bids);
+        // println!("Combined asks BEFORE: {:?}", combined_book.asks);
+
         let asks: Vec<&Level> = combined_book
             .asks
             .values()
@@ -93,9 +107,28 @@ async fn main() {
             .take(DEPTH)
             .collect();
 
-        let took = (Utc::now() - now).num_microseconds().unwrap();
-        println!("BIDS: {:?}", bids);
-        println!("ASKS: {:?}", asks);
-        println!("Combining orderbooks took: {took}us");
+        let bids: Vec<&Level> = combined_book
+            .bids
+            .values()
+            .into_iter()
+            .rev()
+            .take(DEPTH)
+            .collect();
+
+        let levels: Vec<&Level> = asks.into_iter().chain(bids.into_iter()).collect();
+        // let took = (Utc::now() - now).num_microseconds().unwrap();
+
+        terminal
+            .draw(|f| render_orderbook(f, levels))
+            .expect("error rendering TUI");
+
+        // if let Event::Key(key) = event::read()? {
+        //     match key.code {
+        //         KeyCode::Char('q') => return Ok(()),
+        //         // KeyCode::Down => app.next(),
+        //         // KeyCode::Up => app.previous(),
+        //         _ => continue
+        //     }
+        // }
     }
 }
