@@ -17,41 +17,9 @@ use std::vec;
 #[tokio::main]
 async fn main() {
     let subscriptions = vec![
-        WebsocketSubscription::new(
-            Venue::BinanceSpot,
-            "BTC",
-            "USDT",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
-        ),
-        WebsocketSubscription::new(
-            Venue::Coinbase,
-            "BTC",
-            "USD",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
-        ),
-        WebsocketSubscription::new(
-            Venue::GateIO,
-            "BTC",
-            "USDT",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
-        ),
-        WebsocketSubscription::new(
-            Venue::Kraken,
-            "XBT",
-            "USD",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
-        ),
-        WebsocketSubscription::new(
-            Venue::Okx,
-            "BTC",
-            "USDT",
-            InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
-        ),
+        WebsocketSubscription::new(Venue::BinanceSpot, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
+        WebsocketSubscription::new(Venue::GateIO, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
+        WebsocketSubscription::new(Venue::Okx, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
     ];
 
     // subscribe to websockets for each venue
