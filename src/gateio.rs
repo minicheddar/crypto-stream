@@ -93,7 +93,7 @@ impl GateIO {
                     }
                 }
             }
-            x => {
+            _ => {
                 // println!("other: {:?}", x);
                 None
             }

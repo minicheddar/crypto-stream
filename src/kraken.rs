@@ -116,7 +116,7 @@ impl Kraken {
                     }
                 }
             }
-            x => {
+            _ => {
                 // println!("other: {:?}", x);
                 None
             }

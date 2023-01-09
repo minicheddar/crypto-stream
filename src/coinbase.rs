@@ -85,7 +85,8 @@ impl Coinbase {
                             .get(&format!("{}|l2update", snapshot.product_id))
                             .expect("unable to find matching subscription");
 
-                        return Some(MarketData::from((sub.instrument.clone(), snapshot)));
+                        // TODO: depth get from `Coinbase.depth`
+                        return Some(MarketData::from((sub.instrument.clone(), snapshot, 10)));
                     }
                     CoinbaseMessage::L2Update(update) => {
                         let sub = map
@@ -96,8 +97,8 @@ impl Coinbase {
                     }
                 }
             }
-            x => {
-                println!("{:?}", x);
+            _ => {
+                // println!("{:?}", x);
                 None
             }
         }
@@ -236,8 +237,8 @@ pub struct CoinbaseSnapshot {
     pub asks: Vec<OrderBookLevel>,
 }
 
-impl From<(Instrument, CoinbaseSnapshot)> for MarketData {
-    fn from((instrument, snapshot): (Instrument, CoinbaseSnapshot)) -> Self {
+impl From<(Instrument, CoinbaseSnapshot, usize)> for MarketData {
+    fn from((instrument, snapshot, depth): (Instrument, CoinbaseSnapshot, usize)) -> Self {
         Self {
             venue: Venue::Coinbase,
             instrument,

@@ -91,7 +91,7 @@ impl BinanceFutures {
                     }
                 }
             }
-            x => {
+            _ => {
                 // println!("other: {:?}", x);
                 None
             }

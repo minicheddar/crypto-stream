@@ -114,7 +114,7 @@ impl Huobi {
                     }
                 }
             }
-            x => {
+            _ => {
                 // println!("other: {:?}", x);
                 None
             }

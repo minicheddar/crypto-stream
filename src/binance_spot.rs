@@ -91,7 +91,7 @@ impl BinanceSpot {
                     }
                 }
             }
-            x => {
+            _ => {
                 // println!("other: {:?}", x);
                 None
             }
