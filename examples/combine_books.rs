@@ -71,10 +71,12 @@ async fn main() {
     // initialise TUI
     let mut terminal = setup_terminal_ui();
 
-    let mut cross_book = CrossVenueOrderBook::new("BTCUSD".to_string(), 10);
+    let mut cross_book = CrossVenueOrderBook::new("BTC/USD".to_string(), 10);
     while let Some(msg) = market_data.next().await {
+        // listen for exit event to clean up terminal
+        // TODO: implement graceful shutdown
         if check_for_exit_signal(&mut terminal) {
-            break; // TODO:  this will panic, implement graceful shutdown
+            break;
         }
 
         // map quote streams to combined orderbook levels

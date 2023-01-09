@@ -4,12 +4,14 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use rust_decimal_macros::dec;
 use std::io;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
     style::{Color, Style},
-    widgets::{Cell, Row, Table, TableState},
+    text::{Span, Spans},
+    widgets::{Cell, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
 
@@ -22,7 +24,6 @@ pub fn setup_terminal_ui() -> Terminal<CrosstermBackend<io::Stdout>> {
 }
 
 pub fn check_for_exit_signal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> bool {
-    // listen for exit event to clean up terminal + shutdown
     if let Event::Key(key) = event::read().unwrap() {
         match key.code {
             KeyCode::Char('q') => {
@@ -43,11 +44,28 @@ pub fn check_for_exit_signal(terminal: &mut Terminal<CrosstermBackend<io::Stdout
     false
 }
 
-pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, _: &String, levels: Vec<&Level>) {
+pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, symbol: &String, levels: Vec<&Level>) {
     let chunks = Layout::default()
-        .constraints([Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Min(4), Constraint::Percentage(90)].as_ref())
         .margin(1)
         .split(f.size());
+
+    let best_bid = levels.iter().find(|x| x.side == Side::Bid).unwrap();
+    let best_ask = levels.iter().find(|x| x.side == Side::Ask).unwrap();
+    let spread = best_ask.price - best_bid.price;
+    let spread_pct = spread / best_ask.price * dec!(100);
+
+    let text = Paragraph::new(vec![
+        Spans::from(Span::styled(
+            format!("Symbol: {}", symbol),
+            Style::default().fg(Color::Blue),
+        )),
+        Spans::from(Span::styled(
+            format!("Spread: ${} ({:.5} %)", spread, spread_pct),
+            Style::default().fg(Color::Blue),
+        )),
+    ]);
+    f.render_widget(text, chunks[0]);
 
     let rows = levels.iter().map(|l| {
         Row::new(vec![
@@ -74,5 +92,5 @@ pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, _: &String, levels: Vec<&L
         ])
         .column_spacing(2);
 
-    f.render_stateful_widget(table, chunks[0], &mut TableState::default());
+    f.render_stateful_widget(table, chunks[1], &mut TableState::default());
 }

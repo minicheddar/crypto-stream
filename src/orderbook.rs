@@ -144,7 +144,6 @@ impl CrossVenueOrderBook {
             .values()
             .into_iter()
             .take(depth)
-            // .cloned()
             .collect();
 
         let bids: Vec<&Level> = self
@@ -154,7 +153,6 @@ impl CrossVenueOrderBook {
             .into_iter()
             .rev()
             .take(depth)
-            // .cloned()
             .collect();
 
         return asks.into_iter().chain(bids.into_iter()).collect();
