@@ -92,7 +92,7 @@ impl BinanceFutures {
                 }
             }
             x => {
-                println!("other: {:?}", x);
+                // println!("other: {:?}", x);
                 None
             }
         }
@@ -130,8 +130,8 @@ impl WebsocketSubscriber for BinanceFutures {
                     .to_string(),
                 ));
 
-                if let Message::Text(json) = socket.read_message().expect("Error reading message") {
-                    println!("{:?}", json);
+                if let Message::Text(_) = socket.read_message().expect("Error reading message") {
+                    // println!("{:?}", json);
                 }
 
                 sub_id += 1;
