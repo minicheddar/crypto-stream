@@ -6,13 +6,13 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
-type LevelMap = BTreeMap<Decimal, Level>;
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Side {
     Bid,
     Ask,
 }
+
+type LevelMap = BTreeMap<Decimal, Level>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Level {
@@ -41,9 +41,8 @@ pub fn levels_to_map(
     depth: usize,
 ) -> LevelMap {
     levels
-        .split_at(depth)
-        .0
         .iter()
+        .take(depth)
         .map(|x| {
             (
                 Decimal::from_f64(x.price).unwrap(),
@@ -156,5 +155,108 @@ impl CrossVenueOrderBook {
             .collect();
 
         return asks.into_iter().chain(bids.into_iter()).collect();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::OrderBookLevel;
+
+    #[test]
+    fn levels_to_map_returns_all_when_less_than_depth() {
+        let input = vec![
+            OrderBookLevel {
+                price: 100.0,
+                quantity: 10.0,
+            },
+            OrderBookLevel {
+                price: 110.0,
+                quantity: 20.0,
+            },
+            OrderBookLevel {
+                price: 120.0,
+                quantity: 30.0,
+            },
+        ];
+
+        let output: BTreeMap<Decimal, Level> = [
+            (
+                Decimal::from_f64(100.0).unwrap(),
+                Level {
+                    price: Decimal::from_f64(100.0).unwrap(),
+                    quantity: Decimal::from_f64(10.0).unwrap(),
+                    venue: Venue::Coinbase,
+                    side: Side::Bid,
+                },
+            ),
+            (
+                Decimal::from_f64(110.0).unwrap(),
+                Level {
+                    price: Decimal::from_f64(110.0).unwrap(),
+                    quantity: Decimal::from_f64(20.0).unwrap(),
+                    venue: Venue::Coinbase,
+                    side: Side::Bid,
+                },
+            ),
+            (
+                Decimal::from_f64(120.0).unwrap(),
+                Level {
+                    price: Decimal::from_f64(120.0).unwrap(),
+                    quantity: Decimal::from_f64(30.0).unwrap(),
+                    venue: Venue::Coinbase,
+                    side: Side::Bid,
+                },
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        assert_eq!(levels_to_map(&input, Venue::Coinbase, Side::Bid, 4), output);
+    }
+
+    #[test]
+    fn levels_to_map_returns_depth_when_greater_than_depth() {
+        let input = vec![
+            OrderBookLevel {
+                price: 100.0,
+                quantity: 10.0,
+            },
+            OrderBookLevel {
+                price: 110.0,
+                quantity: 20.0,
+            },
+            OrderBookLevel {
+                price: 120.0,
+                quantity: 30.0,
+            },
+        ];
+
+        let output: BTreeMap<Decimal, Level> = [
+            (
+                Decimal::from_f64(100.0).unwrap(),
+                Level {
+                    price: Decimal::from_f64(100.0).unwrap(),
+                    quantity: Decimal::from_f64(10.0).unwrap(),
+                    venue: Venue::Coinbase,
+                    side: Side::Bid,
+                },
+            ),
+            (
+                Decimal::from_f64(110.0).unwrap(),
+                Level {
+                    price: Decimal::from_f64(110.0).unwrap(),
+                    quantity: Decimal::from_f64(20.0).unwrap(),
+                    venue: Venue::Coinbase,
+                    side: Side::Bid,
+                },
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        assert_eq!(levels_to_map(&input, Venue::Coinbase, Side::Bid, 2), output);
     }
 }
