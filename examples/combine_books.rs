@@ -7,7 +7,7 @@ use crypto_stream::{
     model::*,
     orderbook::CrossVenueOrderBook,
     subscriptions_into_stream,
-    tui::{render_orderbook, setup_terminal_ui},
+    tui::{check_for_exit_signal, render_orderbook, setup_terminal_ui},
     websocket::{WebsocketSubscription, WebsocketSubscriptionKind},
 };
 use futures::StreamExt;
@@ -26,6 +26,13 @@ async fn main() {
             WebsocketSubscriptionKind::Quote,
         ),
         WebsocketSubscription::new(
+            Venue::Coinbase,
+            "BTC",
+            "USD",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::Quote,
+        ),
+        WebsocketSubscription::new(
             Venue::GateIO,
             "BTC",
             "USDT",
@@ -40,16 +47,16 @@ async fn main() {
             WebsocketSubscriptionKind::Quote,
         ),
         WebsocketSubscription::new(
-            Venue::Coinbase,
-            "BTC",
+            Venue::Kraken,
+            "XBT",
             "USD",
             InstrumentKind::Spot,
             WebsocketSubscriptionKind::Quote,
         ),
         WebsocketSubscription::new(
-            Venue::Kraken,
-            "XBT",
-            "USD",
+            Venue::Okx,
+            "BTC",
+            "USDT",
             InstrumentKind::Spot,
             WebsocketSubscriptionKind::Quote,
         ),
@@ -66,21 +73,17 @@ async fn main() {
 
     let mut cross_book = CrossVenueOrderBook::new("BTCUSD".to_string(), 10);
     while let Some(msg) = market_data.next().await {
+        if check_for_exit_signal(&mut terminal) {
+            break; // TODO:  this will panic, implement graceful shutdown
+        }
+
         // map quote streams to combined orderbook levels
         cross_book.update(&msg);
         let levels = cross_book.to_levels(cross_book.depth);
 
-        // render combined orderbook
+        // render combined orderbook in terminal
         terminal
             .draw(|f| render_orderbook(f, &cross_book.symbol, levels))
             .expect("error rendering TUI");
-
-        // // listen for exit event to shutdown
-        // if let Event::Key(key) = event::read().unwrap() {
-        //     match key.code {
-        //         KeyCode::Char('q') => break,
-        //         _ => continue,
-        //     }
-        // }
     }
 }

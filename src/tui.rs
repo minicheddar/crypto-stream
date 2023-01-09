@@ -1,8 +1,8 @@
 use crate::orderbook::{Level, Side};
 use crossterm::{
-    event::EnableMouseCapture,
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{enable_raw_mode, EnterAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::io;
 use tui::{
@@ -19,6 +19,28 @@ pub fn setup_terminal_ui() -> Terminal<CrosstermBackend<io::Stdout>> {
     let _ = execute!(stdout, EnterAlternateScreen, EnableMouseCapture);
     let backend = CrosstermBackend::new(stdout);
     return Terminal::new(backend).unwrap();
+}
+
+pub fn check_for_exit_signal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> bool {
+    // listen for exit event to clean up terminal + shutdown
+    if let Event::Key(key) = event::read().unwrap() {
+        match key.code {
+            KeyCode::Char('q') => {
+                disable_raw_mode().unwrap();
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )
+                .unwrap();
+                terminal.show_cursor().unwrap();
+                return true;
+            }
+            _ => return false,
+        }
+    }
+
+    false
 }
 
 pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, _: &String, levels: Vec<&Level>) {

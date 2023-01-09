@@ -19,14 +19,14 @@ async fn main() {
             "BTC",
             "USDT",
             InstrumentKind::FuturesPerpetual,
-            WebsocketSubscriptionKind::Quote,
+            WebsocketSubscriptionKind::Trade,
         ),
         WebsocketSubscription::new(
             Venue::BinanceSpot,
             "BTC",
             "USDT",
             InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
+            WebsocketSubscriptionKind::Trade,
         ),
         WebsocketSubscription::new(
             Venue::Coinbase,
@@ -40,7 +40,7 @@ async fn main() {
             "BTC",
             "USDT",
             InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
+            WebsocketSubscriptionKind::Trade,
         ),
         WebsocketSubscription::new(
             Venue::Huobi,
@@ -61,7 +61,7 @@ async fn main() {
             "BTC",
             "USDT",
             InstrumentKind::Spot,
-            WebsocketSubscriptionKind::Quote,
+            WebsocketSubscriptionKind::Trade,
         ),
     ];
 
