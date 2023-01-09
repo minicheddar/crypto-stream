@@ -85,14 +85,16 @@ impl LimitOrderBook {
 }
 
 pub struct CrossVenueOrderBook {
+    pub symbol: String,
     pub depth: usize,
     exchange_books: HashMap<Venue, LimitOrderBook>,
     combined_book: LimitOrderBook,
 }
 
 impl CrossVenueOrderBook {
-    pub fn new(depth: usize) -> Self {
+    pub fn new(symbol: String, depth: usize) -> Self {
         Self {
+            symbol,
             depth,
             exchange_books: HashMap::new(),
             combined_book: LimitOrderBook::new(BTreeMap::new(), BTreeMap::new()),
@@ -439,6 +441,7 @@ mod tests {
         .cloned()
         .collect();
 
+        // assert drops 0 quantity levels
         assert_eq!(merge_maps(&coinbase_book, &binance_book), combined_book_1);
 
         coinbase_book.insert(
@@ -474,6 +477,7 @@ mod tests {
         .cloned()
         .collect();
 
+        // assert drops 0 quantity levels that previously had quantity > 0
         assert_eq!(merge_maps(&coinbase_book, &binance_book), combined_book_2);
     }
 }

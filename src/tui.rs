@@ -1,13 +1,27 @@
 use crate::orderbook::{Level, Side};
+use crossterm::{
+    event::EnableMouseCapture,
+    execute,
+    terminal::{enable_raw_mode, EnterAlternateScreen},
+};
+use std::io;
 use tui::{
-    backend::Backend,
+    backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
     style::{Color, Style},
     widgets::{Cell, Row, Table, TableState},
-    Frame,
+    Frame, Terminal,
 };
 
-pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, levels: Vec<&Level>) {
+pub fn setup_terminal_ui() -> Terminal<CrosstermBackend<io::Stdout>> {
+    let _ = enable_raw_mode();
+    let mut stdout = io::stdout();
+    let _ = execute!(stdout, EnterAlternateScreen, EnableMouseCapture);
+    let backend = CrosstermBackend::new(stdout);
+    return Terminal::new(backend).unwrap();
+}
+
+pub fn render_orderbook<B: Backend>(f: &mut Frame<B>, _: &String, levels: Vec<&Level>) {
     let chunks = Layout::default()
         .constraints([Constraint::Percentage(100)].as_ref())
         .margin(1)
