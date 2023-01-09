@@ -1,9 +1,9 @@
 # crypto-stream
 An experiment in unifying multiple cryptocurrency exchange streams under a single API. Think CCXT websockets, but in Rust.
 
----
-
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
+
+---
 
 <p align="center">
   <img src="demo.gif" alt="animated" />
@@ -56,9 +56,27 @@ use std::vec;
 #[tokio::main]
 async fn main() {
     let subscriptions = vec![
-        WebsocketSubscription::new(Venue::BinanceSpot, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
-        WebsocketSubscription::new(Venue::GateIO, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
-        WebsocketSubscription::new(Venue::Okx, "BTC", "USDT", InstrumentKind::Spot, WebsocketSubscriptionKind::Quote),
+        WebsocketSubscription::new(
+            Venue::BinanceSpot,
+            "BTC",
+            "USDT",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::Quote,
+        ),
+        WebsocketSubscription::new(
+            Venue::GateIO,
+            "BTC",
+            "USDT",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::Quote,
+        ),
+        WebsocketSubscription::new(
+            Venue::Okx,
+            "BTC",
+            "USDT",
+            InstrumentKind::Spot,
+            WebsocketSubscriptionKind::Quote,
+        ),
     ];
 
     // subscribe to websockets for each venue
@@ -69,25 +87,23 @@ async fn main() {
 
     // initialise TUI
     let mut terminal = setup_terminal_ui();
-
-    let mut cross_book = CrossVenueOrderBook::new("BTC/USD".to_string(), 10);
-
     const TICK_RATE: Duration = Duration::from_millis(100);
     let mut last_draw = Instant::now();
-    loop {
-        if let Some(msg) = market_data.next().await {
-            // map quote streams to combined orderbook levels
-            cross_book.update(&msg);
-            let levels = cross_book.to_levels(cross_book.depth);
 
-            if last_draw.elapsed() > TICK_RATE {
-                last_draw = Instant::now();
+    let mut cross_book = CrossVenueOrderBook::new("BTC/USD".to_string(), 10);
+    while let Some(msg) = market_data.next().await {
+        // map quote streams to combined orderbook levels
+        cross_book.update(&msg);
+        let levels = cross_book.to_levels(cross_book.depth);
 
-                // render combined orderbook in terminal
-                terminal
-                    .draw(|f| render_orderbook(f, &cross_book.symbol, levels))
-                    .expect("error rendering TUI");
-            }
+        // throttle TUI updates to every 100ms
+        if last_draw.elapsed() > TICK_RATE {
+            last_draw = Instant::now();
+
+            // render combined orderbook in terminal
+            terminal
+                .draw(|f| render_orderbook(f, &cross_book.symbol, levels))
+                .expect("error rendering TUI");
         }
     }
 }
