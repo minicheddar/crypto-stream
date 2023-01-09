@@ -245,8 +245,8 @@ impl From<(Instrument, CoinbaseSnapshot, usize)> for MarketData {
             venue_time: Utc::now(),
             received_time: Utc::now(),
             kind: MarketDataKind::L2Snapshot(OrderBook {
-                bids: snapshot.bids,
-                asks: snapshot.asks,
+                bids: snapshot.bids.iter().take(depth).cloned().collect(),
+                asks: snapshot.asks.iter().take(depth).cloned().collect(),
             }),
         }
     }

@@ -266,7 +266,7 @@ pub struct OkxLevel {
 
 impl From<(Instrument, OkxAction, OkxL2Data)> for MarketData {
     fn from((instrument, action, update): (Instrument, OkxAction, OkxL2Data)) -> Self {
-        let bids = update
+        let bids: Vec<OrderBookLevel> = update
             .bids
             .iter()
             .map(|x| OrderBookLevel {
@@ -275,7 +275,7 @@ impl From<(Instrument, OkxAction, OkxL2Data)> for MarketData {
             })
             .collect();
 
-        let asks = update
+        let asks: Vec<OrderBookLevel> = update
             .asks
             .iter()
             .map(|x| OrderBookLevel {
@@ -285,7 +285,11 @@ impl From<(Instrument, OkxAction, OkxL2Data)> for MarketData {
             .collect();
 
         let kind = match action {
-            OkxAction::Snapshot => MarketDataKind::L2Snapshot(OrderBook { bids, asks }),
+            // TODO: pass in depth as arg
+            OkxAction::Snapshot => MarketDataKind::L2Snapshot(OrderBook {
+                bids: bids.iter().take(10).cloned().collect(),
+                asks: asks.iter().take(10).cloned().collect(),
+            }),
             OkxAction::Update => MarketDataKind::L2Update(OrderBook { bids, asks }),
         };
 

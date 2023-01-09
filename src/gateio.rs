@@ -27,7 +27,7 @@ impl GateIO {
 
     pub const TRADE_CHANNEL: &'static str = "spot.trades";
     pub const L2_QUOTE_CHANNEL: &'static str = "spot.order_book";
-    const QUOTE_DEPTH: &'static str = "5";
+    const QUOTE_DEPTH: &'static str = "10";
 
     pub fn new() -> Self {
         Self {
