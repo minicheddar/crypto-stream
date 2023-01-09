@@ -5,7 +5,9 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
 
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
 
-![Demo GIF](./demo.gif)
+<p align="center">
+  <img src="demo.gif" alt="animated" />
+</p>
 
 ## Features:
 * Simple websocket subscription API
