@@ -56,10 +56,11 @@ impl Kraken {
         let (tx, rx) = mpsc::unbounded_channel();
         let subscriptions = self.stream_subscriptions.clone();
 
-        tokio::spawn(async move {
-            loop {
-                if let Some(msg) = Self::read_message(&mut socket, &subscriptions) {
-                    tx.send(msg).unwrap();
+        std::thread::spawn(move || loop {
+            if let Some(msg) = Self::read_message(&mut socket, &subscriptions) {
+                match tx.send(msg) {
+                    Err(err) => println!("{:?}", err),
+                    _ => continue,
                 }
             }
         });

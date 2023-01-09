@@ -6,9 +6,11 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
 :construction: *This library is an active work in progress and not yet suitable for production use* :construction:
 
 ## Features:
-* Simple subscription API
+* Simple websocket subscription API
 * Supports real-time trade and L2 quote data
-* Transforms exchange-native messages to a common `MarketData` type, for easier cross-exchange signal generation
+* Transforms exchange-native messages to a common `MarketData` type, for multi-venue signal generation
+* Cross-exchange order book building, streamed over gRPC
+* Terminal UI for visualisation
 * Websocket integrations for:
     * Binance (USD Futures + Spot)
     * Coinbase (Spot)
@@ -16,10 +18,8 @@ An experiment in unifying multiple cryptocurrency exchange streams under a singl
     * Huobi (Spot)
     * Gate.io (Spot)
     * Kraken (Spot)
-* Cross-exchange/unified order book building
 
 ## Roadmap:
-* Add unified orderbook visualisation
 * Add support for futures contracts
 * Add support for additional market data streams (liquidations, funding ticker, mark price)
 * Add support for additional sinks (mmap file, gRPC, zmq socket)
